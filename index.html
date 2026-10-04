@@ -628,7 +628,7 @@
                 <strong>同步到全部图片</strong>
                 <small id="guideSyncStatus">关闭后每张图片独立设置</small>
               </div>
-              <label class="switch" title="按图片比例同步横竖参考线"><input id="guideSyncToggle" type="checkbox"><span></span></label>
+              <label class="switch" title="在全部图片中保持相同的排版参考线位置"><input id="guideSyncToggle" type="checkbox"><span></span></label>
             </div>
             <div class="guide-actions">
               <button class="btn guide-btn" id="addVerticalGuideBtn"><span class="guide-icon">┃</span> 加竖线</button>
@@ -806,8 +806,11 @@
       }
 
       function restore(s) {
-        Object.assign(state, s, { crop: { ...s.crop }, guides: (s.guides || []).map(guide => ({ ...guide })) });
-        syncSharedGuidesFromCurrent();
+        const { guideEdit, ...edit } = s;
+        Object.assign(state, edit, { crop: { ...s.crop }, guides: (s.guides || []).map(guide => ({ ...guide })) });
+        // Image-only undo must keep the current shared layout, including changes made on another image.
+        if (state.syncGuides && !guideEdit) state.guides = relativeToGuides();
+        else syncSharedGuidesFromCurrent();
         syncSharedRatioFromCurrent();
         syncControls();
         updateOutputSize();
@@ -816,7 +819,9 @@
 
       function commit(before) {
         if (!before) return;
-        if (JSON.stringify(before) === JSON.stringify(snapshot())) return;
+        const after = snapshot();
+        if (JSON.stringify(before) === JSON.stringify(after)) return;
+        before.guideEdit = JSON.stringify(before.guides) !== JSON.stringify(after.guides);
         state.undo.push(before);
         if (state.undo.length > 60) state.undo.shift();
         state.redo.length = 0;
@@ -835,15 +840,17 @@
 
       function undo() {
         if (!state.undo.length) return;
-        state.redo.push(snapshot());
-        restore(state.undo.pop());
+        const previous = state.undo.pop();
+        state.redo.push({ ...snapshot(), guideEdit: previous.guideEdit });
+        restore(previous);
         updateHistoryButtons();
       }
 
       function redo() {
         if (!state.redo.length) return;
-        state.undo.push(snapshot());
-        restore(state.redo.pop());
+        const next = state.redo.pop();
+        state.undo.push({ ...snapshot(), guideEdit: next.guideEdit });
+        restore(next);
         updateHistoryButtons();
       }
 
@@ -942,29 +949,20 @@
 
       function guidesToRelative(guides = state.guides) {
         if (!state.image) return [];
-        const bounds = imageBounds();
-        const width = Math.max(1, bounds.right - bounds.left);
-        const height = Math.max(1, bounds.bottom - bounds.top);
+        // Guides belong to the canvas layout, not the independently transformed image.
         return guides.map(guide => ({
           id: guide.id,
           axis: guide.axis,
-          ratio: guide.axis === 'x'
-            ? (guide.position - bounds.left) / width
-            : (guide.position - bounds.top) / height
+          ratio: guide.position / Math.max(1, guide.axis === 'x' ? state.viewW : state.viewH)
         }));
       }
 
       function relativeToGuides(template = state.sharedGuides) {
         if (!state.image) return [];
-        const bounds = imageBounds();
-        const width = bounds.right - bounds.left;
-        const height = bounds.bottom - bounds.top;
         return template.map(guide => ({
           id: guide.id,
           axis: guide.axis,
-          position: guide.axis === 'x'
-            ? bounds.left + guide.ratio * width
-            : bounds.top + guide.ratio * height
+          position: guide.ratio * (guide.axis === 'x' ? state.viewW : state.viewH)
         }));
       }
 
@@ -979,7 +977,7 @@
           state.syncGuides = true;
           state.sharedGuides = guidesToRelative();
           state.items.forEach(item => { delete item.pendingGuideTemplate; });
-          showToast(`已按图片比例同步到 ${state.items.length} 张图片`);
+          showToast(`已固定参考线排版位置并同步到 ${state.items.length} 张图片`);
         } else {
           saveActiveItem();
           const template = state.sharedGuides.map(guide => ({ ...guide }));
@@ -1872,7 +1870,7 @@
         $('#guideSyncToggle').checked = state.syncGuides;
         $('#guideSyncRow').classList.toggle('active', state.syncGuides);
         $('#guideSyncStatus').textContent = state.syncGuides
-          ? `已同步 · ${state.items.length} 张 · 按图片比例定位`
+          ? `已同步 · ${state.items.length} 张 · 固定排版位置`
           : state.items.length > 1 ? '关闭后每张图片独立设置' : '导入多张图片后可同步';
         $('#ratioSyncToggle').checked = state.syncRatio;
         $('#ratioSyncChip').classList.toggle('active', state.syncRatio);
