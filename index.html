@@ -307,6 +307,23 @@
     .guide-actions { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; }
     .guide-btn { min-height: 32px; padding: 0 8px; font-size: 11px; }
     .guide-btn .guide-icon { color: #62cfff; font-weight: 800; }
+    .guide-sync-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(255,255,255,.025);
+      transition: border-color .18s, background .18s;
+    }
+    .guide-sync-row.active { border-color: rgba(var(--accent-rgb),.38); background: rgba(var(--accent-rgb),.07); }
+    .guide-sync-copy { min-width: 0; }
+    .guide-sync-copy strong { display: block; margin-bottom: 3px; color: #d8ddd7; font-size: 11px; font-weight: 700; }
+    .guide-sync-copy small { display: block; overflow: hidden; color: #747d75; font-size: 9px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+    .guide-sync-row.active .guide-sync-copy small { color: var(--accent); }
     .guide-hint { margin-top: 8px; color: #74766d; font-size: 10px; line-height: 1.45; }
     .background-control {
       margin-top: 15px;
@@ -545,6 +562,13 @@
               <div class="guide-title">参考线 <span id="guideCount">0</span></div>
               <label class="switch" title="显示或隐藏参考线"><input id="guideToggle" type="checkbox" checked><span></span></label>
             </div>
+            <div class="guide-sync-row" id="guideSyncRow">
+              <div class="guide-sync-copy">
+                <strong>同步到全部图片</strong>
+                <small id="guideSyncStatus">关闭后每张图片独立设置</small>
+              </div>
+              <label class="switch" title="按图片比例同步横竖参考线"><input id="guideSyncToggle" type="checkbox"><span></span></label>
+            </div>
             <div class="guide-actions">
               <button class="btn guide-btn" id="addVerticalGuideBtn"><span class="guide-icon">┃</span> 加竖线</button>
               <button class="btn guide-btn" id="addHorizontalGuideBtn"><span class="guide-icon">━</span> 加横线</button>
@@ -653,6 +677,8 @@
         rotationFeedback: null,
         guides: [],
         guidesVisible: true,
+        syncGuides: false,
+        sharedGuides: [],
         mode: 'image',
         dpr: 1,
         viewW: 0,
@@ -683,6 +709,7 @@
 
       function restore(s) {
         Object.assign(state, s, { crop: { ...s.crop }, guides: (s.guides || []).map(guide => ({ ...guide })) });
+        syncSharedGuidesFromCurrent();
         syncControls();
         updateOutputSize();
         render();
@@ -814,6 +841,59 @@
         item.redo = cloneHistory(state.redo);
       }
 
+      function guidesToRelative(guides = state.guides) {
+        if (!state.image) return [];
+        const bounds = imageBounds();
+        const width = Math.max(1, bounds.right - bounds.left);
+        const height = Math.max(1, bounds.bottom - bounds.top);
+        return guides.map(guide => ({
+          id: guide.id,
+          axis: guide.axis,
+          ratio: guide.axis === 'x'
+            ? (guide.position - bounds.left) / width
+            : (guide.position - bounds.top) / height
+        }));
+      }
+
+      function relativeToGuides(template = state.sharedGuides) {
+        if (!state.image) return [];
+        const bounds = imageBounds();
+        const width = bounds.right - bounds.left;
+        const height = bounds.bottom - bounds.top;
+        return template.map(guide => ({
+          id: guide.id,
+          axis: guide.axis,
+          position: guide.axis === 'x'
+            ? bounds.left + guide.ratio * width
+            : bounds.top + guide.ratio * height
+        }));
+      }
+
+      function syncSharedGuidesFromCurrent() {
+        if (!state.syncGuides || !state.image) return;
+        state.sharedGuides = guidesToRelative();
+      }
+
+      function setGuideSync(enabled) {
+        if (!state.image) return;
+        if (enabled) {
+          state.syncGuides = true;
+          state.sharedGuides = guidesToRelative();
+          state.items.forEach(item => { delete item.pendingGuideTemplate; });
+          showToast(`已按图片比例同步到 ${state.items.length} 张图片`);
+        } else {
+          saveActiveItem();
+          const template = state.sharedGuides.map(guide => ({ ...guide }));
+          state.items.forEach(item => {
+            if (item.id !== state.activeItemId) item.pendingGuideTemplate = template.map(guide => ({ ...guide }));
+          });
+          state.syncGuides = false;
+          showToast('已关闭同步；每张图片可独立调整');
+        }
+        syncControls();
+        render();
+      }
+
       function renderQueue() {
         const panel = $('#queuePanel');
         const list = $('#queueList');
@@ -918,6 +998,15 @@
           calculateBaseScale();
           setInitialCrop();
           updateOutputSize(true);
+        }
+        if (state.syncGuides) {
+          state.guides = relativeToGuides();
+          state.guidesVisible = true;
+        } else if (item.pendingGuideTemplate) {
+          state.guides = relativeToGuides(item.pendingGuideTemplate);
+          item.edit = item.edit || snapshot();
+          item.edit.guides = state.guides.map(guide => ({ ...guide }));
+          delete item.pendingGuideTemplate;
         }
         emptyState.hidden = true;
         $('#fileName').textContent = state.fileName;
@@ -1240,15 +1329,21 @@
           });
           state.guidesVisible = true;
         });
+        syncSharedGuidesFromCurrent();
+        syncControls();
       }
 
       function removeGuide(id) {
         action(() => { state.guides = state.guides.filter(guide => guide.id !== id); });
+        syncSharedGuidesFromCurrent();
+        syncControls();
       }
 
       function clearGuides() {
         if (!state.guides.length) { showToast('当前图片还没有参考线'); return; }
         action(() => { state.guides = []; });
+        syncSharedGuidesFromCurrent();
+        syncControls();
       }
 
       function insideCrop(x, y) {
@@ -1505,6 +1600,7 @@
           }
         }
         if (state.interaction.moved) commit(state.interaction.before);
+        if (state.interaction.kind === 'guide') syncSharedGuidesFromCurrent();
         state.interaction = null;
         state.snapGuides = null;
         state.rotationFeedback = null;
@@ -1585,6 +1681,11 @@
         $('#gridToggle').checked = state.grid;
         $('#snapToggle').checked = state.snap;
         $('#guideToggle').checked = state.guidesVisible;
+        $('#guideSyncToggle').checked = state.syncGuides;
+        $('#guideSyncRow').classList.toggle('active', state.syncGuides);
+        $('#guideSyncStatus').textContent = state.syncGuides
+          ? `已同步 · ${state.items.length} 张 · 按图片比例定位`
+          : state.items.length > 1 ? '关闭后每张图片独立设置' : '导入多张图片后可同步';
         $('#guideCount').textContent = state.guides.length;
         $('#clearGuidesBtn').disabled = state.guides.length === 0;
         $$('#ratioGroup .ratio-btn').forEach(btn => {
@@ -1829,6 +1930,7 @@
       $('#gridToggle').addEventListener('change', (e) => action(() => state.grid = e.target.checked));
       $('#snapToggle').addEventListener('change', (e) => { state.snap = e.target.checked; state.snapGuides = null; render(); });
       $('#guideToggle').addEventListener('change', (e) => action(() => state.guidesVisible = e.target.checked));
+      $('#guideSyncToggle').addEventListener('change', (e) => setGuideSync(e.target.checked));
       $('#addVerticalGuideBtn').addEventListener('click', () => addGuide('x'));
       $('#addHorizontalGuideBtn').addEventListener('click', () => addGuide('y'));
       $('#clearGuidesBtn').addEventListener('click', clearGuides);
