@@ -449,6 +449,26 @@
     }
     .source-folder-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 9px; }
     .source-access { color: #747d75; font-size: 9px; line-height: 1.35; }
+    .source-access-note { margin: 8px 0 0; color: #747d75; font-size: 10px; line-height: 1.5; }
+    .permission-dialog {
+      width: min(460px, calc(100vw - 32px));
+      padding: 24px;
+      border: 1px solid rgba(var(--accent-rgb),.24);
+      border-radius: 18px;
+      background: var(--panel);
+      color: var(--text);
+      box-shadow: var(--shadow);
+    }
+    .permission-dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(5px); }
+    .permission-dialog h2 { margin: 0 0 10px; font-size: 19px; letter-spacing: -.02em; }
+    .permission-dialog p { color: var(--muted); font-size: 12px; line-height: 1.7; }
+    .permission-files { padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+    .permission-files strong { display: block; color: var(--accent); font-size: 12px; }
+    .permission-files span { display: block; margin-top: 6px; overflow-wrap: anywhere; color: var(--muted); font-size: 11px; line-height: 1.6; }
+    .permission-actions { display: grid; gap: 8px; margin-top: 18px; }
+    .permission-actions .btn { min-height: 42px; }
+    .permission-status { min-height: 40px; }
+    .permission-status.error { color: var(--danger); }
     .privacy { display: flex; gap: 8px; margin-top: 11px; color: #77786e; font-size: 10px; line-height: 1.45; }
     .privacy svg { width: 13px; height: 13px; flex: none; margin-top: 1px; color: #94a45d; }
     .disabled { opacity: .45; pointer-events: none; }
@@ -697,7 +717,7 @@
             </label>
             <label class="export-mode">
               <input type="radio" name="exportMode" value="source">
-              <span><strong>跟随原图位置</strong><small>需要通过“导入文件夹”添加图片</small></span>
+              <span><strong>跟随原图位置</strong><small>导入文件夹，或为已有图片补充目录授权</small></span>
             </label>
           </div>
           <div class="destination-panel" id="askDestinationPanel">
@@ -717,9 +737,10 @@
                 <input id="sourceSubfolderName" value="裁剪结果" maxlength="80" spellcheck="false">
               </div>
               <div class="source-folder-actions">
-                <span class="source-access" id="sourceAccessStatus">当前图片没有原目录权限</span>
-                <button class="btn folder-btn" id="importFolderFromExportBtn">导入文件夹</button>
+                <span class="source-access" id="sourceAccessStatus">当前图片待授权原目录</span>
+                <button class="btn folder-btn" id="authorizeSourceFolderBtn">授权原图文件夹</button>
               </div>
+              <p class="source-access-note">补充授权会保留现有裁剪设置，无需重新导入。</p>
             </div>
           </div>
           <button class="btn primary export-btn" id="exportBtn">
@@ -736,6 +757,17 @@
     </main>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <dialog class="permission-dialog" id="sourcePermissionDialog" aria-labelledby="sourcePermissionTitle">
+    <h2 id="sourcePermissionTitle">补充原图文件夹授权</h2>
+    <p>裁剪设置已保留。选择下面图片所在的文件夹，完成授权后会继续导出。</p>
+    <div class="permission-files"><strong id="sourcePermissionCount"></strong><span id="sourcePermissionFiles"></span></div>
+    <p class="permission-status" id="sourcePermissionStatus" role="status" aria-live="polite">同一文件夹里的图片会一起授权；图片在不同文件夹时，可继续选择。</p>
+    <div class="permission-actions">
+      <button class="btn primary" id="sourcePermissionChooseBtn">选择原图文件夹</button>
+      <button class="btn" id="sourcePermissionFallbackBtn">本次另选保存位置</button>
+      <button class="btn ghost" id="sourcePermissionCancelBtn">取消导出</button>
+    </div>
+  </dialog>
 
   <script>
     (() => {
@@ -784,6 +816,7 @@
         outputTouched: false,
         items: [],
         activeItemId: null,
+        exporting: false,
         exportMode: 'ask',
         defaultDirectoryHandle: null,
         sourceSubfolder: true,
@@ -1045,7 +1078,8 @@
         panel.hidden = state.items.length === 0;
         $('#queueCount').textContent = state.items.length;
         $('#exportAllBtn').textContent = `全部导出（${state.items.length} 张）`;
-        $('#exportAllBtn').disabled = state.items.length === 0;
+        $('#exportAllBtn').disabled = state.exporting || state.items.length === 0;
+        $('#exportBtn').disabled = state.exporting;
         list.replaceChildren();
         for (const item of state.items) {
           const card = document.createElement('div');
@@ -1053,6 +1087,7 @@
           const select = document.createElement('button');
           select.className = 'queue-select';
           select.type = 'button';
+          select.disabled = state.exporting;
           select.title = item.name;
           const thumb = document.createElement('img');
           thumb.src = item.objectUrl;
@@ -1065,6 +1100,7 @@
           const remove = document.createElement('button');
           remove.className = 'queue-remove';
           remove.type = 'button';
+          remove.disabled = state.exporting;
           remove.textContent = '×';
           remove.title = `移除 ${item.name}`;
           remove.setAttribute('aria-label', `移除 ${item.name}`);
@@ -2079,7 +2115,7 @@
         const sourced = state.items.filter(entry => entry.sourceDirectoryHandle).length;
         $('#sourceAccessStatus').textContent = item?.sourceDirectoryHandle
           ? `当前图片：${item.sourceDirectoryHandle.name}`
-          : sourced ? `已有 ${sourced}/${state.items.length} 张具备原目录权限` : '当前图片没有原目录权限';
+          : sourced ? `已有 ${sourced}/${state.items.length} 张关联原目录` : '当前图片待授权原目录';
       }
 
       function validSubfolderName() {
@@ -2087,14 +2123,148 @@
         return name || '裁剪结果';
       }
 
-      async function sourceDestinationFor(item) {
+      async function sameOriginalFile(left, right) {
+        if (!left || !right || left.size !== right.size) return false;
+        const [a, b] = await Promise.all([left.arrayBuffer(), right.arrayBuffer()]);
+        const bytes = new Uint8Array(a);
+        const other = new Uint8Array(b);
+        return bytes.every((byte, index) => byte === other[index]);
+      }
+
+      async function associateSourceFolder(directoryHandle, items) {
+        const byName = new Map();
+        const matches = new Map(items.map(item => [item.id, []]));
+        for (const item of items) {
+          const name = (item.file?.name || item.name).toLowerCase();
+          if (!byName.has(name)) byName.set(name, []);
+          byName.get(name).push(item);
+        }
+        async function scan(directory, relativePath = '', depth = 0) {
+          if (depth > 12) return;
+          for await (const handle of directory.values()) {
+            if (handle.kind === 'directory') {
+              await scan(handle, `${relativePath}${handle.name}/`, depth + 1);
+            } else if (handle.kind === 'file' && byName.has(handle.name.toLowerCase())) {
+              const file = await handle.getFile();
+              for (const item of byName.get(handle.name.toLowerCase())) {
+                if (await sameOriginalFile(item.file, file)) matches.get(item.id).push({ directory, relativePath });
+              }
+            }
+          }
+        }
+        await scan(directoryHandle);
+        let matched = 0;
+        let ambiguous = 0;
+        for (const item of items) {
+          const candidates = matches.get(item.id);
+          if (candidates.length === 1) {
+            item.sourceDirectoryHandle = candidates[0].directory;
+            item.sourceRelativePath = candidates[0].relativePath;
+            matched++;
+          } else if (candidates.length > 1) ambiguous++;
+        }
+        syncDestinationUI();
+        return { matched, ambiguous };
+      }
+
+      async function sourceItemsNeedingPermission(items) {
+        const missing = [];
+        for (const item of items) {
+          const handle = item.sourceDirectoryHandle;
+          try {
+            if (!handle || (handle.queryPermission && await handle.queryPermission({ mode: 'readwrite' }) !== 'granted')) missing.push(item);
+          } catch (error) { missing.push(item); }
+        }
+        return missing;
+      }
+
+      async function authorizeSourceFolder() {
+        if (!state.items.length) { showToast('请先导入图片'); return; }
+        const handle = await pickDirectory('readwrite');
+        if (!handle) return;
+        try {
+          const missing = await sourceItemsNeedingPermission(state.items);
+          const result = await associateSourceFolder(handle, missing.length ? missing : [activeItem()]);
+          showToast(result.matched
+            ? `已为 ${result.matched} 张图片关联原目录，裁剪设置已保留`
+            : result.ambiguous ? '找到多份相同原图，请选择更具体的文件夹' : '未找到相同原图，请选择图片实际所在的文件夹');
+        } catch (error) { showToast('无法读取这个文件夹，请重新选择'); }
+      }
+
+      let sourceAuthorizationRequest = null;
+
+      async function refreshSourcePermissionDialog(message = '', isError = false) {
+        const request = sourceAuthorizationRequest;
+        if (!request) return [];
+        const missing = await sourceItemsNeedingPermission(request.items);
+        $('#sourcePermissionCount').textContent = `还有 ${missing.length} 张图片需要授权`;
+        $('#sourcePermissionFiles').textContent = missing.slice(0, 5).map(item => item.name).join('、') + (missing.length > 5 ? ` 等 ${missing.length} 张` : '');
+        const supported = Boolean(window.showDirectoryPicker);
+        $('#sourcePermissionChooseBtn').hidden = !supported;
+        $('#sourcePermissionFallbackBtn').textContent = supported ? '本次另选保存位置' : '本次使用浏览器下载';
+        $('#sourcePermissionStatus').textContent = message || (supported
+          ? '同一文件夹里的图片会一起授权；图片在不同文件夹时，可继续选择。'
+          : '当前浏览器无法写入原图文件夹，可使用浏览器下载保存裁剪结果。');
+        $('#sourcePermissionStatus').classList.toggle('error', isError);
+        return missing;
+      }
+
+      function finishSourceAuthorization(result) {
+        const request = sourceAuthorizationRequest;
+        sourceAuthorizationRequest = null;
+        $('#sourcePermissionDialog').close();
+        request?.resolve(result);
+      }
+
+      function requestSourceAuthorization(items) {
+        return new Promise(resolve => {
+          sourceAuthorizationRequest = { items, resolve };
+          refreshSourcePermissionDialog();
+          $('#sourcePermissionDialog').showModal();
+        });
+      }
+
+      async function chooseSourceFolderForPendingExport() {
+        if (!sourceAuthorizationRequest) return;
+        const button = $('#sourcePermissionChooseBtn');
+        const handle = await pickDirectory('readwrite');
+        if (!handle) return;
+        button.disabled = true;
+        $('#sourcePermissionFallbackBtn').disabled = true;
+        $('#sourcePermissionStatus').textContent = '正在核对原图，裁剪设置会保留…';
+        try {
+          const request = sourceAuthorizationRequest;
+          const missing = await sourceItemsNeedingPermission(request.items);
+          const result = await associateSourceFolder(handle, missing);
+          if (sourceAuthorizationRequest !== request) return;
+          const remaining = await refreshSourcePermissionDialog(result.matched
+            ? `已为 ${result.matched} 张图片补充授权，请继续选择其余图片的原图文件夹。`
+            : result.ambiguous ? '找到多份相同原图，请选择更具体的文件夹。' : '这个文件夹里没有对应的原图，请重新选择。', !result.matched);
+          if (!remaining.length) finishSourceAuthorization({ source: true });
+        } catch (error) {
+          if (sourceAuthorizationRequest) await refreshSourcePermissionDialog('无法读取这个文件夹，请重新选择。', true);
+        } finally {
+          button.disabled = false;
+          $('#sourcePermissionFallbackBtn').disabled = false;
+        }
+      }
+
+      async function chooseFallbackForPendingExport() {
+        if (!sourceAuthorizationRequest) return;
+        if (!window.showDirectoryPicker) {
+          finishSourceAuthorization({ destination: { handle: null, label: '浏览器下载位置' } });
+          return;
+        }
+        const handle = await pickDirectory('readwrite');
+        if (handle) finishSourceAuthorization({ destination: { handle, label: handle.name } });
+      }
+
+      async function sourceDestinationFor(item, useSubfolder, subfolderName) {
         const originalDirectory = item?.sourceDirectoryHandle;
-        if (!originalDirectory) throw new Error(`“${item?.name || '这张图片'}”没有原目录权限，请用“导入文件夹”重新添加`);
-        if (!await ensureDirectoryPermission(originalDirectory)) throw new Error(`需要重新授权原图文件夹：${originalDirectory.name}`);
-        if (!state.sourceSubfolder) return { handle: originalDirectory, label: originalDirectory.name };
-        const folderName = validSubfolderName();
-        const handle = await originalDirectory.getDirectoryHandle(folderName, { create: true });
-        return { handle, label: `${originalDirectory.name}/${folderName}` };
+        if (!originalDirectory) throw new Error('请先授权原图文件夹');
+        if (!useSubfolder) return { handle: originalDirectory, label: originalDirectory.name };
+        const handle = await originalDirectory.getDirectoryHandle(subfolderName, { create: true });
+        return { handle, label: `${originalDirectory.name}/${subfolderName}` };
       }
 
       async function sharedDestinationForExport() {
@@ -2109,42 +2279,85 @@
           if (!await ensureDirectoryPermission(handle)) throw new Error('默认文件夹需要重新授权');
           return { handle, label: handle.name };
         }
-        return sourceDestinationFor(activeItem());
+        return null;
+      }
+
+      async function prepareExportPlan(items) {
+        const destinations = new Map();
+        let sharedDestination = null;
+        let source = state.exportMode === 'source';
+        const useSubfolder = state.sourceSubfolder;
+        const subfolderName = validSubfolderName();
+        if (source) {
+          if ((await sourceItemsNeedingPermission(items)).length) {
+            const authorization = await requestSourceAuthorization(items);
+            if (!authorization) return null;
+            if (authorization.destination) { sharedDestination = authorization.destination; source = false; }
+          }
+        } else {
+          sharedDestination = await sharedDestinationForExport();
+          if (!sharedDestination) return null;
+        }
+        // Complete permission checks before creating any output files or changing the active image.
+        const bySourceDirectory = new Map();
+        for (const item of items) {
+          let destination = sharedDestination;
+          if (source) {
+            const directory = item.sourceDirectoryHandle;
+            destination = bySourceDirectory.get(directory);
+            if (!destination) {
+              destination = await sourceDestinationFor(item, useSubfolder, subfolderName);
+              bySourceDirectory.set(directory, destination);
+            }
+          }
+          destinations.set(item.id, destination);
+        }
+        return { destinations, source, label: sharedDestination?.label };
+      }
+
+      function setExportBusy(busy) {
+        state.exporting = busy;
+        $('#exportBtn').disabled = busy;
+        $('#exportAllBtn').disabled = busy || !state.items.length;
+        $$('.queue-select, .queue-remove').forEach(button => { button.disabled = busy; });
       }
 
       async function exportImage() {
         if (!state.image) { showToast('请先打开一张图片'); return; }
+        if (state.exporting) return;
+        const item = activeItem();
+        saveActiveItem();
+        setExportBusy(true);
         try {
+          const plan = await prepareExportPlan([item]);
+          if (!plan) return;
           const result = await buildExportResult();
-          const destination = await sharedDestinationForExport();
-          if (!destination) return;
+          const destination = plan.destinations.get(item.id);
           await saveExportResult(result, destination.handle);
           saveActiveItem();
           showToast(`已导出到 ${destination.label} · ${result.outW} × ${result.outH} ${result.ext.toUpperCase()}`);
         } catch (error) {
           showToast(error.message || '导出失败，请重试');
-        }
+        } finally { setExportBusy(false); }
       }
 
       async function exportAllImages() {
         if (!state.items.length) { showToast('请先导入图片'); return; }
+        if (state.exporting) return;
         saveActiveItem();
         const originalId = state.activeItemId;
-        let sharedDestination = null;
-        if (state.exportMode !== 'source') {
-          try { sharedDestination = await sharedDestinationForExport(); }
-          catch (error) { showToast(error.message || '无法使用导出文件夹'); return; }
-          if (!sharedDestination) return;
-        }
+        const items = [...state.items];
         const usedNamesByDirectory = new WeakMap();
         const browserDownloadNames = new Map();
         let completed = 0;
-        $('#exportAllBtn').disabled = true;
+        setExportBusy(true);
         try {
-          for (const item of state.items) {
+          const plan = await prepareExportPlan(items);
+          if (!plan) return;
+          for (const item of items) {
             activateItem(item.id, false);
             const result = await buildExportResult();
-            const destination = state.exportMode === 'source' ? await sourceDestinationFor(item) : sharedDestination;
+            const destination = plan.destinations.get(item.id);
             let usedNames = browserDownloadNames;
             if (destination.handle) {
               usedNames = usedNamesByDirectory.get(destination.handle) || new Map();
@@ -2158,13 +2371,14 @@
             completed++;
             $('#exportAllBtn').textContent = `正在导出 ${completed}/${state.items.length}`;
           }
-          showToast(state.exportMode === 'source'
+          showToast(plan.source
             ? `已将 ${completed} 张图片导出到各自原图文件夹`
-            : `已将 ${completed} 张图片导出到 ${sharedDestination.label}`);
+            : `已将 ${completed} 张图片导出到 ${plan.label}`);
         } catch (error) {
           showToast(`已完成 ${completed} 张；${error.message || '导出中断'}`);
         } finally {
           if (originalId && state.items.some(item => item.id === originalId)) activateItem(originalId, false);
+          setExportBusy(false);
           renderQueue();
         }
       }
@@ -2218,7 +2432,11 @@
       $('#addMoreBtn').addEventListener('click', () => fileInput.click());
       $('#chooseImportFolderBtn').addEventListener('click', importFolder);
       $('#addFolderBtn').addEventListener('click', importFolder);
-      $('#importFolderFromExportBtn').addEventListener('click', importFolder);
+      $('#authorizeSourceFolderBtn').addEventListener('click', authorizeSourceFolder);
+      $('#sourcePermissionChooseBtn').addEventListener('click', chooseSourceFolderForPendingExport);
+      $('#sourcePermissionFallbackBtn').addEventListener('click', chooseFallbackForPendingExport);
+      $('#sourcePermissionCancelBtn').addEventListener('click', () => finishSourceAuthorization(null));
+      $('#sourcePermissionDialog').addEventListener('cancel', (e) => { e.preventDefault(); finishSourceAuthorization(null); });
       fileInput.addEventListener('change', () => { loadFiles(fileInput.files); fileInput.value = ''; });
       $('#resetBtn').addEventListener('click', resetAll);
       $('#undoBtn').addEventListener('click', undo);
@@ -2292,6 +2510,7 @@
       window.addEventListener('beforeunload', () => state.items.forEach(item => URL.revokeObjectURL(item.objectUrl)));
 
       document.addEventListener('keydown', (e) => {
+        if ($('#sourcePermissionDialog').open) return;
         const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName);
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
           e.preventDefault(); e.shiftKey ? redo() : undo(); return;
