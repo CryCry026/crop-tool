@@ -2,6 +2,10 @@
 
 一款无需安装、完全在浏览器本地运行的图片裁剪工具。
 
+在线地址：https://crycry026.github.io/crop-tool/ 。发布仓库只使用 `CryCry026/crop-tool`，GitHub Pages 来源为 `main` 分支根目录。
+
+“衣格 · 详情页模板工具”独立部署在 https://crycry026.github.io/yige-detail-studio/ ，对应仓库为 `CryCry026/yige-detail-studio`，两个项目不能相互覆盖首页。
+
 ## 使用
 
 双击 `index.html`，然后选择、拖入或粘贴一张或多张图片即可开始。
