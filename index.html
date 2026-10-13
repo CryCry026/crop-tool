@@ -393,6 +393,16 @@
     .background-hint { margin-top: 9px; color: #77786e; font-size: 10px; line-height: 1.45; }
     .export-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
     .export-grid .field:first-child { grid-column: 1 / -1; }
+    .jpg-size-setting { margin-top: 12px; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
+    .jpg-size-setting .toggle-row { margin-top: 0; }
+    .jpg-size-setting .switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .jpg-size-controls { margin-top: 12px; }
+    .jpg-size-input { display: flex; align-items: center; gap: 9px; }
+    .jpg-size-input input { width: 100%; min-width: 0; height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font-variant-numeric: tabular-nums; }
+    .jpg-size-input input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .jpg-size-input span { color: var(--muted); font-size: 12px; }
+    .jpg-size-hint { margin: 9px 0 0; color: var(--muted); font-size: 10px; line-height: 1.55; }
+    .export-size-result { display: block; margin: 0 0 12px; color: var(--accent); font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
     .export-note { min-height: 32px; margin: 13px 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
     .export-btn { width: 100%; height: 48px; font-size: 14px; }
     .export-btn svg { margin-right: 5px; }
@@ -701,11 +711,20 @@
               </select>
             </div>
             <div class="field" id="qualityField">
-              <div class="field-head"><span>质量</span><span class="value-readout" id="qualityValue">92%</span></div>
+              <div class="field-head"><label for="qualitySlider" id="qualityLabel">质量</label><span class="value-readout" id="qualityValue">92%</span></div>
               <input type="range" id="qualitySlider" min="10" max="100" value="92" step="1">
             </div>
           </div>
+          <div class="jpg-size-setting" id="jpgSizeSetting" hidden>
+            <div class="toggle-row"><label for="jpgSizeLimitToggle">限制 JPG 文件大小</label><label class="switch"><input id="jpgSizeLimitToggle" type="checkbox" aria-describedby="jpgSizeHint"><span></span></label></div>
+            <div class="jpg-size-controls" id="jpgSizeControls" hidden>
+              <div class="field-head"><label for="jpgMaxSize">每张最大大小</label></div>
+              <div class="jpg-size-input"><input id="jpgMaxSize" type="number" value="2" min="0.001" step="any" inputmode="decimal" aria-describedby="jpgSizeHint"><span>MB</span></div>
+              <p class="jpg-size-hint" id="jpgSizeHint">支持小数，如 0.5。先降低质量，仍超限时等比例缩小导出尺寸，不改变裁剪框。1 MB = 1,000,000 字节。</p>
+            </div>
+          </div>
           <div class="export-note" id="exportNote">PNG 适合保留透明背景和清晰图形。</div>
+          <output class="export-size-result" id="exportSizeResult" aria-live="polite" hidden></output>
           <div class="export-modes" id="exportModes" role="radiogroup" aria-label="导出位置模式">
             <label class="export-mode active">
               <input type="radio" name="exportMode" value="ask" checked>
@@ -1966,7 +1985,80 @@
         state.outputTouched = true;
       }
 
-      async function buildExportResult() {
+      function readExportOptions() {
+        const mime = $('#formatSelect').value;
+        const quality = Number($('#qualitySlider').value) / 100;
+        let maxBytes = null;
+        if (mime === 'image/jpeg' && $('#jpgSizeLimitToggle').checked) {
+          const mb = Number($('#jpgMaxSize').value);
+          if (!Number.isFinite(mb) || mb < 0.001 || !Number.isSafeInteger(Math.floor(mb * 1_000_000))) {
+            throw new Error('请填写有效的 JPG 大小上限，最小为 0.001 MB');
+          }
+          maxBytes = Math.floor(mb * 1_000_000);
+        }
+        return { mime, quality, maxBytes };
+      }
+
+      function encodeCanvas(canvas, mime, quality) {
+        return new Promise((resolve, reject) => {
+          canvas.toBlob(blob => {
+            if (!blob) reject(new Error('导出失败，请换一种格式重试'));
+            else if (blob.type !== mime) reject(new Error('当前浏览器不支持所选导出格式，请换一种格式'));
+            else resolve(blob);
+          }, mime, quality);
+        });
+      }
+
+      async function encodeJpegWithinLimit(original, quality, maxBytes) {
+        const minQuality = Math.min(quality, 0.1);
+        let canvas = original;
+        let resizeScale = 1;
+        // Every successful return is checked against the cap. Never save an oversized JPG.
+        for (;;) {
+          const highest = await encodeCanvas(canvas, 'image/jpeg', quality);
+          if (highest.size <= maxBytes) return { blob: highest, quality, outW: canvas.width, outH: canvas.height };
+          const lowest = quality === minQuality ? highest : await encodeCanvas(canvas, 'image/jpeg', minQuality);
+          if (lowest.size <= maxBytes) {
+            let low = minQuality, high = quality, best = lowest, bestQuality = minQuality;
+            for (let step = 0; step < 8; step++) {
+              const candidateQuality = (low + high) / 2;
+              const candidate = await encodeCanvas(canvas, 'image/jpeg', candidateQuality);
+              if (candidate.size <= maxBytes) { low = bestQuality = candidateQuality; best = candidate; }
+              else high = candidateQuality;
+            }
+            return { blob: best, quality: bestQuality, outW: canvas.width, outH: canvas.height };
+          }
+          if (canvas.width === 1 && canvas.height === 1) {
+            throw new Error('JPG 文件头已超过大小上限，请提高上限后重试');
+          }
+          const scale = Math.min(0.8, Math.sqrt(maxBytes / lowest.size) * 0.9);
+          resizeScale *= scale;
+          const smaller = document.createElement('canvas');
+          smaller.width = Math.max(1, Math.floor(original.width * resizeScale));
+          smaller.height = Math.max(1, Math.floor(original.height * resizeScale));
+          const context = smaller.getContext('2d');
+          context.imageSmoothingEnabled = true;
+          context.imageSmoothingQuality = 'high';
+          context.drawImage(original, 0, 0, smaller.width, smaller.height);
+          if (canvas !== original) { canvas.width = 0; canvas.height = 0; }
+          canvas = smaller;
+        }
+      }
+
+      function formatFileSize(bytes) {
+        const unit = bytes >= 1_000_000 ? 'MB' : 'KB';
+        const size = bytes / (unit === 'MB' ? 1_000_000 : 1_000);
+        return `${(Math.floor(size * 100) / 100).toFixed(2)} ${unit}`;
+      }
+
+      function showExportSizeResult(result) {
+        const quality = result.ext === 'png' ? '' : ` · 质量 ${(result.quality * 100).toFixed(1)}%`;
+        const resized = result.resized ? ` · 已等比例缩小为 ${result.outW} × ${result.outH}` : '';
+        $('#exportSizeResult').textContent = `上次导出：${formatFileSize(result.blob.size)}${quality}${resized}`;
+        $('#exportSizeResult').hidden = false;
+      }
+
+      async function buildExportResult(options = readExportOptions()) {
         if (!state.image) throw new Error('没有可导出的图片');
         setOutputFromWidth();
         const outW = Number($('#outputW').value);
@@ -1974,8 +2066,7 @@
         if (outW * outH > 80_000_000) {
           throw new Error('输出尺寸过大，请把宽高调小一些');
         }
-        const mime = $('#formatSelect').value;
-        const quality = Number($('#qualitySlider').value) / 100;
+        const { mime, quality, maxBytes } = options;
         const out = document.createElement('canvas');
         out.width = outW;
         out.height = outH;
@@ -1996,11 +2087,12 @@
         octx.imageSmoothingQuality = 'high';
         octx.drawImage(state.image, -state.sourceW / 2, -state.sourceH / 2);
         octx.restore();
-        const blob = await new Promise(resolve => out.toBlob(resolve, mime, quality));
-        if (!blob) throw new Error('导出失败，请换一种格式重试');
+        const encoded = maxBytes !== null
+          ? await encodeJpegWithinLimit(out, quality, maxBytes)
+          : { blob: await encodeCanvas(out, mime, quality), quality, outW, outH };
         const ext = mime === 'image/jpeg' ? 'jpg' : mime.split('/')[1];
         const base = (state.fileName.replace(/\.[^.]+$/, '') || 'cropped-image').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-');
-        return { blob, outW, outH, ext, fileName: `${base}-cropped.${ext}` };
+        return { ...encoded, resized: encoded.outW !== outW || encoded.outH !== outH, ext, fileName: `${base}-cropped.${ext}` };
       }
 
       function downloadBlob(blob, fileName) {
@@ -2320,6 +2412,10 @@
         $('#exportBtn').disabled = busy;
         $('#exportAllBtn').disabled = busy || !state.items.length;
         $$('.queue-select, .queue-remove').forEach(button => { button.disabled = busy; });
+        $('#formatSelect').disabled = busy;
+        $('#qualitySlider').disabled = busy || $('#formatSelect').value === 'image/png';
+        $('#jpgSizeLimitToggle').disabled = busy;
+        $('#jpgMaxSize').disabled = busy || !$('#jpgSizeLimitToggle').checked;
       }
 
       async function exportImage() {
@@ -2329,13 +2425,15 @@
         saveActiveItem();
         setExportBusy(true);
         try {
+          const options = readExportOptions();
           const plan = await prepareExportPlan([item]);
           if (!plan) return;
-          const result = await buildExportResult();
+          const result = await buildExportResult(options);
           const destination = plan.destinations.get(item.id);
           await saveExportResult(result, destination.handle);
+          showExportSizeResult(result);
           saveActiveItem();
-          showToast(`已导出到 ${destination.label} · ${result.outW} × ${result.outH} ${result.ext.toUpperCase()}`);
+          showToast(`已导出到 ${destination.label} · ${result.outW} × ${result.outH} ${result.ext.toUpperCase()} · ${formatFileSize(result.blob.size)}`);
         } catch (error) {
           showToast(error.message || '导出失败，请重试');
         } finally { setExportBusy(false); }
@@ -2352,11 +2450,12 @@
         let completed = 0;
         setExportBusy(true);
         try {
+          const options = readExportOptions();
           const plan = await prepareExportPlan(items);
           if (!plan) return;
           for (const item of items) {
             activateItem(item.id, false);
-            const result = await buildExportResult();
+            const result = await buildExportResult(options);
             const destination = plan.destinations.get(item.id);
             let usedNames = browserDownloadNames;
             if (destination.handle) {
@@ -2367,13 +2466,15 @@
             usedNames.set(result.fileName, count + 1);
             const fileName = count ? result.fileName.replace(/(\.[^.]+)$/, `-${count + 1}$1`) : result.fileName;
             await saveExportResult(result, destination.handle, fileName);
+            showExportSizeResult(result);
             saveActiveItem();
             completed++;
             $('#exportAllBtn').textContent = `正在导出 ${completed}/${state.items.length}`;
           }
-          showToast(plan.source
+          const limitNote = options.maxBytes === null ? '' : `；每张 JPG 均不超过 ${formatFileSize(options.maxBytes)}`;
+          showToast((plan.source
             ? `已将 ${completed} 张图片导出到各自原图文件夹`
-            : `已将 ${completed} 张图片导出到 ${plan.label}`);
+            : `已将 ${completed} 张图片导出到 ${plan.label}`) + limitNote);
         } catch (error) {
           showToast(`已完成 ${completed} 张；${error.message || '导出中断'}`);
         } finally {
@@ -2386,6 +2487,8 @@
       function updateFormatUI() {
         const mime = $('#formatSelect').value;
         $('#qualityField').classList.toggle('disabled', mime === 'image/png');
+        $('#qualitySlider').disabled = state.exporting || mime === 'image/png';
+        updateJpegLimitUI();
         $('#transparentToggle').disabled = mime === 'image/jpeg';
         if (mime === 'image/jpeg') $('#transparentToggle').checked = false;
         const notes = {
@@ -2396,6 +2499,23 @@
         $('#exportNote').textContent = notes[mime];
         syncBackgroundUI();
         render();
+      }
+
+      function updateJpegLimitUI() {
+        const jpeg = $('#formatSelect').value === 'image/jpeg';
+        const enabled = $('#jpgSizeLimitToggle').checked;
+        $('#jpgSizeSetting').hidden = !jpeg;
+        $('#jpgSizeControls').hidden = !enabled;
+        $('#jpgMaxSize').disabled = state.exporting || !enabled;
+        $('#qualityLabel').textContent = jpeg && enabled ? '最高质量' : '质量';
+      }
+
+      function saveJpegLimitPreference() {
+        try {
+          localStorage.setItem('crop-tool-jpg-size-limit', String($('#jpgSizeLimitToggle').checked));
+          const value = Number($('#jpgMaxSize').value);
+          if (Number.isFinite(value) && value >= 0.001) localStorage.setItem('crop-tool-jpg-max-mb', String(value));
+        } catch (error) { /* keep settings in memory when storage is unavailable */ }
       }
 
       function normalizeColor(value) {
@@ -2477,6 +2597,8 @@
       $$('.color-swatch').forEach(btn => btn.addEventListener('click', () => setBackgroundColor(btn.dataset.color)));
       $('#qualitySlider').addEventListener('input', (e) => $('#qualityValue').textContent = `${e.target.value}%`);
       $('#formatSelect').addEventListener('change', updateFormatUI);
+      $('#jpgSizeLimitToggle').addEventListener('change', () => { updateJpegLimitUI(); saveJpegLimitPreference(); });
+      $('#jpgMaxSize').addEventListener('input', saveJpegLimitPreference);
       $('#exportBtn').addEventListener('click', exportImage);
       $('#exportAllBtn').addEventListener('click', exportAllImages);
       $('#chooseFolderBtn').addEventListener('click', chooseDefaultExportFolder);
@@ -2543,6 +2665,9 @@
         state.exportMode = localStorage.getItem('crop-tool-export-mode') || 'ask';
         state.sourceSubfolder = localStorage.getItem('crop-tool-source-subfolder') !== 'false';
         state.sourceSubfolderName = localStorage.getItem('crop-tool-source-subfolder-name') || '裁剪结果';
+        $('#jpgSizeLimitToggle').checked = localStorage.getItem('crop-tool-jpg-size-limit') === 'true';
+        const savedMaxMb = Number(localStorage.getItem('crop-tool-jpg-max-mb'));
+        if (Number.isFinite(savedMaxMb) && savedMaxMb >= 0.001) $('#jpgMaxSize').value = savedMaxMb;
       } catch (error) { /* use defaults */ }
       setTheme(savedTheme, false);
       setExportMode(state.exportMode, false);
