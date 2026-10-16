@@ -1552,6 +1552,16 @@
         }));
       }
 
+      function imageHandles() {
+        const corners = imageCorners();
+        const midpoint = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+        return {
+          ...corners,
+          n: midpoint(corners.nw, corners.ne), e: midpoint(corners.ne, corners.se),
+          s: midpoint(corners.sw, corners.se), w: midpoint(corners.nw, corners.sw)
+        };
+      }
+
       function drawBoardImageSelection(context) {
         if (!isBoard() || !state.image) return;
         const corners = imageCorners();
@@ -1569,8 +1579,8 @@
         context.lineWidth = 1;
         context.stroke();
 
-        if (!state.locked) {
-          for (const point of Object.values(corners)) {
+        if (!state.locked && state.mode !== 'rotate') {
+          for (const point of Object.values(imageHandles())) {
             context.beginPath();
             context.rect(point.x - 4, point.y - 4, 8, 8);
             context.fillStyle = '#f2f3f0';
@@ -1780,7 +1790,7 @@
       }
 
       function getHandles() {
-        if (isBoard()) return state.image ? imageCorners() : {};
+        if (isBoard()) return state.image ? imageHandles() : {};
         const c = state.crop;
         return {
           nw: { x: c.x, y: c.y }, n: { x: c.x + c.w / 2, y: c.y }, ne: { x: c.x + c.w, y: c.y },
@@ -1791,11 +1801,32 @@
       }
 
       function hitHandle(x, y) {
+        if (isBoard() && (state.locked || state.mode === 'rotate')) return null;
         const handles = getHandles();
         for (const [name, p] of Object.entries(handles)) {
           if (Math.abs(x - p.x) <= icons.hitSize / 2 && Math.abs(y - p.y) <= icons.hitSize / 2) return name;
         }
+        if (isBoard() && state.image) {
+          for (const [name, a, b] of [['n', 'nw', 'ne'], ['e', 'ne', 'se'], ['s', 'sw', 'se'], ['w', 'nw', 'sw']]) {
+            const start = handles[a], end = handles[b];
+            const vx = end.x - start.x, vy = end.y - start.y;
+            const lengthSquared = vx * vx + vy * vy;
+            if (!lengthSquared) continue;
+            const t = clamp(((x - start.x) * vx + (y - start.y) * vy) / lengthSquared, 0, 1);
+            if (Math.hypot(x - start.x - t * vx, y - start.y - t * vy) <= icons.hitSize / 2) return name;
+          }
+        }
         return null;
+      }
+
+      function resizeCursor(handle) {
+        const cursors = { nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize', n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize' };
+        if (!isBoard()) return cursors[handle];
+        const directions = { nw: [-1, -1], n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0] };
+        const [x, y] = directions[handle];
+        const angle = Math.atan2(y * state.flipY, x * state.flipX) + imageTransform().angle;
+        const index = (Math.round(angle / (Math.PI / 4)) % 4 + 4) % 4;
+        return ['ew-resize', 'nwse-resize', 'ns-resize', 'nesw-resize'][index];
       }
 
       function hitGuide(x, y) {
@@ -2097,6 +2128,8 @@
         const guide = handle ? null : hitGuide(p.x, p.y);
         if (!guide && state.locked) { showToast('图片已锁定，请在设置中解锁'); return; }
         if (!handle && !guide && state.mode !== 'rotate' && !insideCrop(p.x, p.y)) return;
+        const boardHandles = handle && isBoard() ? imageHandles() : null;
+        const opposite = { nw: 'se', n: 's', ne: 'sw', e: 'w', se: 'nw', s: 'n', sw: 'ne', w: 'e' };
         canvas.setPointerCapture(e.pointerId);
         state.interaction = {
           kind: handle ? (isBoard() ? 'resizeImage' : 'resize') : guide ? 'guide' : state.mode,
@@ -2106,8 +2139,8 @@
           startCrop: { ...state.crop },
           startPanX: state.panX, startPanY: state.panY,
           startZoom: state.zoom,
-          imageAnchor: handle && isBoard() ? imageCorners()[{ nw: 'se', ne: 'sw', se: 'nw', sw: 'ne' }[handle]] : null,
-          imageHandle: handle && isBoard() ? imageCorners()[handle] : null,
+          imageAnchor: boardHandles?.[opposite[handle]] || null,
+          imageHandle: boardHandles?.[handle] || null,
           startFineRotation: state.fineRotation,
           before: snapshot(), moved: false
         };
@@ -2120,8 +2153,7 @@
         if (!state.interaction) {
           const handle = state.image ? hitHandle(p.x, p.y) : null;
           const guide = !handle && state.image ? hitGuide(p.x, p.y) : null;
-          const cursors = { nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize', n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize' };
-          canvas.style.cursor = guide ? (guide.axis === 'x' ? 'ew-resize' : 'ns-resize') : state.locked ? 'not-allowed' : handle ? cursors[handle] : state.mode === 'rotate' ? 'ew-resize' : insideCrop(p.x, p.y) ? (state.mode === 'image' ? 'grab' : 'move') : 'default';
+          canvas.style.cursor = guide ? (guide.axis === 'x' ? 'ew-resize' : 'ns-resize') : state.locked ? 'not-allowed' : handle ? resizeCursor(handle) : state.mode === 'rotate' ? 'ew-resize' : insideCrop(p.x, p.y) ? (state.mode === 'image' ? 'grab' : 'move') : 'default';
           return;
         }
         const i = state.interaction;
