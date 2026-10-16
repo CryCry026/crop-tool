@@ -166,7 +166,8 @@
       background-size: 24px 24px;
       background-position: 0 0, 0 12px, 12px -12px, -12px 0;
     }
-    #preview { width: 100%; height: 100%; display: block; touch-action: none; }
+    #preview { width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+    #preview:focus-visible + .workspace-state { border-color: rgba(255,255,255,.4); }
     .empty-state {
       position: absolute;
       inset: 22px;
@@ -261,10 +262,11 @@
       color: var(--muted);
       font-size: 12px;
     }
-    .status-info { display: flex; align-items: center; gap: 15px; min-width: 0; }
+    .status-info { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 4px 15px; min-width: 0; }
     .status-info span { white-space: nowrap; }
+    .placement-readout { font-variant-numeric: tabular-nums; }
     .file-name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
-    .mode-switch { display: flex; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: #141510; }
+    .mode-switch { display: flex; flex-shrink: 0; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: #141510; }
     .mode-btn { border: 0; border-radius: 7px; padding: 6px 10px; color: var(--muted); background: transparent; cursor: pointer; font-size: 11px; }
     .mode-btn.active { color: var(--text); background: var(--panel-2); box-shadow: 0 1px 5px rgba(0,0,0,.25); }
 
@@ -554,11 +556,16 @@
       .brand div:last-child { display: none; }
       .top-actions .btn.ghost { display: none; }
       .history .icon-btn { display: none; }
-      .workspace { height: 720px; grid-template-rows: 105px minmax(0, 1fr) auto 62px; }
+      .workspace { height: 720px; grid-template-rows: 105px minmax(0, 1fr) auto 86px; }
       .toolbar { align-items: flex-start; flex-direction: column; gap: 5px; padding: 9px 12px; }
       .toolbar .quick-tools { width: 100%; justify-content: space-between; }
       aside { grid-template-columns: 1fr; }
       .status-info span:nth-child(n+2) { display: none; }
+      .statusbar { flex-direction: column; align-items: stretch; justify-content: center; gap: 6px; padding: 7px 12px; }
+      .status-info { flex: initial; gap: 3px 10px; font-size: 10px; }
+      .status-info .file-name { max-width: 90px; }
+      .status-info #imagePlacementReadout { display: block; }
+      .mode-switch { align-self: flex-end; }
       .empty-state { inset: 12px; }
     }
   </style>
@@ -653,6 +660,7 @@
             <span class="file-name" id="fileName">尚未选择图片</span>
             <span id="sourceSize">—</span>
             <span id="cropSize">裁剪区域 —</span>
+            <span class="placement-readout" id="imagePlacementReadout" title="图片在画布上的范围尺寸与左上角位置，单位为 px" hidden></span>
           </div>
           <div class="mode-switch" title="决定拖动画面时移动什么">
             <button class="mode-btn active" data-mode="image">移动图片</button>
@@ -1554,60 +1562,24 @@
         context.lineTo(corners.se.x, corners.se.y);
         context.lineTo(corners.sw.x, corners.sw.y);
         context.closePath();
-        context.strokeStyle = 'rgba(0,0,0,.8)';
-        context.lineWidth = 3;
+        context.strokeStyle = 'rgba(0,0,0,.55)';
+        context.lineWidth = 2;
         context.stroke();
-        context.strokeStyle = state.locked ? 'rgba(255,255,255,.95)' : uiColor('--accent');
-        context.lineWidth = state.locked ? 2 : 1.5;
-        context.setLineDash([5, 3]);
-        context.shadowColor = state.locked ? 'transparent' : uiColor('--accent');
-        context.shadowBlur = state.locked ? 0 : 4;
+        context.strokeStyle = state.locked ? 'rgba(255,255,255,.45)' : 'rgba(255,255,255,.85)';
+        context.lineWidth = 1;
         context.stroke();
-        context.setLineDash([]);
-        context.shadowBlur = 0;
 
         if (!state.locked) {
           for (const point of Object.values(corners)) {
             context.beginPath();
-            context.rect(point.x - 7, point.y - 7, 14, 14);
-            context.fillStyle = '#f7f8f2';
+            context.rect(point.x - 4, point.y - 4, 8, 8);
+            context.fillStyle = '#f2f3f0';
             context.fill();
-            context.strokeStyle = '#172015';
+            context.strokeStyle = '#39403a';
             context.lineWidth = 1;
             context.stroke();
-            context.beginPath();
-            context.rect(point.x - 4, point.y - 4, 8, 8);
-            context.fillStyle = uiColor('--accent');
-            context.fill();
           }
         }
-        context.restore();
-        drawBoardImageReadout(context, corners);
-      }
-
-      function drawBoardImageReadout(context, corners) {
-        const xs = Object.values(corners).map(point => point.x);
-        const ys = Object.values(corners).map(point => point.y);
-        const scale = state.boardViewScale || 1;
-        const x = Math.round((Math.min(...xs) - state.crop.x) / scale);
-        const y = Math.round((Math.min(...ys) - state.crop.y) / scale);
-        const w = Math.max(1, Math.round((Math.max(...xs) - Math.min(...xs)) / scale));
-        const h = Math.max(1, Math.round((Math.max(...ys) - Math.min(...ys)) / scale));
-        const text = `X ${x}  Y ${y}  ·  ${w} × ${h} px`;
-        context.save();
-        context.font = '600 11px ui-monospace, "SFMono-Regular", Consolas, monospace';
-        const width = Math.ceil(context.measureText(text).width) + 16;
-        const height = 24;
-        const left = clamp(Math.min(...xs), 6, Math.max(6, state.viewW - width - 6));
-        const top = clamp(Math.min(...ys) - height - 6, 6, Math.max(6, state.viewH - height - 6));
-        roundedRect(context, left, top, width, height, 6);
-        context.fillStyle = 'rgba(18,20,14,.94)';
-        context.fill();
-        context.strokeStyle = state.locked ? 'rgba(255,255,255,.5)' : uiColor('--accent');
-        context.lineWidth = 1;
-        context.stroke();
-        context.fillStyle = state.locked ? uiColor('--text') : uiColor('--accent');
-        context.fillText(text, left + 8, top + 16);
         context.restore();
       }
 
@@ -1709,6 +1681,7 @@
 
       function render() {
         updateWorkspaceState();
+        updateCropReadout();
         ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
         ctx.clearRect(0, 0, state.viewW, state.viewH);
         if (!state.image) return;
@@ -1736,9 +1709,11 @@
         ctx.rect(c.x, c.y, c.w, c.h);
         ctx.fill('evenodd');
 
-        ctx.strokeStyle = 'rgba(255,255,255,.92)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(Math.round(c.x) + .5, Math.round(c.y) + .5, Math.round(c.w), Math.round(c.h));
+        if (!isBoard()) {
+          ctx.strokeStyle = 'rgba(255,255,255,.92)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(Math.round(c.x) + .5, Math.round(c.y) + .5, Math.round(c.w), Math.round(c.h));
+        }
 
         if (state.grid && c.w > 90 && c.h > 90) {
           ctx.strokeStyle = 'rgba(255,255,255,.42)';
@@ -1802,7 +1777,6 @@
         }
         drawRotationHud(ctx);
         ctx.restore();
-        updateCropReadout();
       }
 
       function getHandles() {
@@ -2321,9 +2295,21 @@
       }
 
       function updateCropReadout() {
+        const placementReadout = $('#imagePlacementReadout');
+        placementReadout.hidden = !state.image || !isBoard();
+        placementReadout.textContent = '';
         if (!state.image) return;
         const n = naturalCropSize();
-        $('#cropSize').textContent = `裁剪区域 ${n.w} × ${n.h} px`;
+        $('#cropSize').textContent = `${isBoard() ? '画布' : '裁剪区域'} ${n.w} × ${n.h} px`;
+        if (isBoard()) {
+          const bounds = imageBounds();
+          const scale = state.boardViewScale || 1;
+          const x = Math.round((bounds.left - state.crop.x) / scale);
+          const y = Math.round((bounds.top - state.crop.y) / scale);
+          const w = Math.max(1, Math.round((bounds.right - bounds.left) / scale));
+          const h = Math.max(1, Math.round((bounds.bottom - bounds.top) / scale));
+          placementReadout.textContent = `图片 ${w} × ${h} px · X ${x}  Y ${y}`;
+        }
       }
 
       function updateOutputSize(force = false) {
