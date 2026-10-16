@@ -407,6 +407,41 @@
     .export-btn { width: 100%; height: 48px; font-size: 14px; }
     .export-btn svg { margin-right: 5px; }
     .export-btn + .export-btn { margin-top: 8px; }
+    .workspace-state { position: absolute; top: 12px; left: 14px; z-index: 2; max-width: calc(100% - 28px); padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: rgba(11,13,12,.88); color: var(--muted); font: 11px ui-monospace, Consolas, monospace; pointer-events: none; }
+    .workspace-state.locked { color: var(--accent); border-color: rgba(var(--accent-rgb),.35); }
+    .stage-wrap.is-board { background: #080b09; }
+    .settings-dialog { position: fixed; inset: 12px 12px 12px auto; margin: 0; width: min(470px, calc(100vw - 24px)); height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); max-width: none; padding: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
+    .settings-dialog::backdrop { background: rgba(0,0,0,.55); }
+    .settings-shell { height: 100%; display: flex; flex-direction: column; }
+    .settings-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 12px; }
+    .settings-header h2 { margin: 0; font-size: 19px; letter-spacing: -.03em; }
+    .settings-header p { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
+    .settings-tabs { display: flex; gap: 6px; padding: 0 20px 14px; border-bottom: 1px solid var(--line); }
+    .settings-tabs button { flex: 1; }
+    .settings-tabs .active { color: var(--accent); background: rgba(var(--accent-rgb),.08); border-color: rgba(var(--accent-rgb),.35); }
+    .settings-content { overflow: auto; overscroll-behavior: contain; padding: 0 20px 20px; flex: 1; }
+    .settings-section { padding: 19px 0; border-bottom: 1px solid var(--line); }
+    .settings-section:last-child { border-bottom: 0; padding-bottom: 0; }
+    .settings-section h3 { margin: 0 0 12px; font-size: 12px; color: var(--text); }
+    .settings-note { margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.65; }
+    .settings-section .toggle-row { margin-top: 12px; gap: 10px; }
+    .settings-section .toggle-row > label:first-child { flex: 1; }
+    .settings-section input[type=number] { width: 100%; min-width: 0; height: 39px; padding: 0 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font-variant-numeric: tabular-nums; }
+    .settings-section .number-row { margin: 12px 0; grid-template-columns: 1fr 16px 1fr; }
+    .settings-section .number-box { min-width: 0; }
+    .settings-section .theme-switcher { width: fit-content; margin-top: 10px; }
+    .settings-section .ratio-sync-chip { justify-content: space-between; padding: 10px 0; border: 0; background: none; }
+    .settings-section .guide-sync-row { margin: 8px 0 0; }
+    .settings-error { min-height: 17px; margin: 9px 0 0; color: var(--danger); font-size: 11px; line-height: 1.5; }
+    .shortcut-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+    .shortcut-key { min-width: 70px; max-width: 200px; min-height: 32px; padding: 6px 9px; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; color: var(--text); font: 11px ui-monospace, Consolas, monospace; cursor: pointer; overflow-wrap: anywhere; }
+    .shortcut-key.listening { color: var(--accent); border-color: var(--accent); }
+    .settings-dialog :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .settings-dialog .switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 3px; }
+    #settingsBtn { min-width: 72px; }
+    #boardSizeNote { color: var(--accent); }
+    @media (max-width: 560px) { .history { min-width: 0; gap: 4px; } .settings-dialog { inset: 6px; width: calc(100vw - 12px); height: calc(100dvh - 12px); max-height: calc(100dvh - 12px); } .workspace-state { font-size: 10px; top: 8px; left: 8px; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
     .folder-setting {
       display: flex;
       align-items: center;
@@ -542,12 +577,7 @@
         <button class="btn" id="resetBtn">重置调整</button>
       </div>
       <div class="history">
-        <div class="theme-switcher" role="group" aria-label="界面主题色">
-          <button class="theme-dot active" style="--theme-color:#d9ff66" data-theme="lime" title="青柠绿主题" aria-label="青柠绿主题"></button>
-          <button class="theme-dot" style="--theme-color:#5ac8fa" data-theme="blue" title="冰川蓝主题" aria-label="冰川蓝主题"></button>
-          <button class="theme-dot" style="--theme-color:#ad8cff" data-theme="violet" title="柔光紫主题" aria-label="柔光紫主题"></button>
-          <button class="theme-dot" style="--theme-color:#ff806e" data-theme="coral" title="珊瑚橙主题" aria-label="珊瑚橙主题"></button>
-        </div>
+        <button class="btn" id="settingsBtn" aria-haspopup="dialog" aria-controls="settingsDialog">⚙ 设置</button>
         <button class="icon-btn" id="undoBtn" title="撤销 Ctrl+Z" aria-label="撤销" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 14-4-4 4-4"/><path d="M5 10h9a5 5 0 0 1 5 5v1"/></svg>
         </button>
@@ -569,10 +599,6 @@
             <button class="ratio-btn" data-ratio="1.5">3:2</button>
             <button class="ratio-btn" data-ratio="1.7777777778">16:9</button>
             <button class="ratio-btn" data-ratio="0.6666666667">2:3</button>
-            <div class="ratio-sync-chip" id="ratioSyncChip" title="让所有待处理图片使用同一个裁剪比例">
-              <span id="ratioSyncStatus">比例独立</span>
-              <label class="switch"><input id="ratioSyncToggle" type="checkbox" aria-label="同步裁剪比例"><span></span></label>
-            </div>
           </div>
           <div class="quick-tools">
             <button class="icon-btn" id="rotateLeftBtn" title="向左旋转 90°" aria-label="向左旋转">
@@ -596,7 +622,8 @@
         </div>
 
         <div class="stage-wrap" id="stageWrap">
-          <canvas id="preview"></canvas>
+          <canvas id="preview" tabindex="0" aria-label="图片编辑画布"></canvas>
+          <div class="workspace-state" id="workspaceState" role="status">普通裁图 · 设置中可开启固定画布</div>
           <div class="empty-state" id="emptyState">
             <div class="empty-inner">
               <div class="upload-orbit">
@@ -646,19 +673,9 @@
             <div class="field-head"><span>微调旋转</span><span class="field-actions"><span class="value-readout" id="fineRotateValue">0°</span><button class="field-reset" id="resetFineRotateBtn" title="只把微调旋转归零">归零</button></span></div>
             <input type="range" id="fineRotateSlider" min="-45" max="45" value="0" step="0.1">
           </div>
-          <div class="toggle-row"><span>显示构图网格</span><label class="switch"><input id="gridToggle" type="checkbox" checked><span></span></label></div>
-          <div class="toggle-row" title="裁剪框或图片靠近边缘时自动对齐"><span>吸附图片边缘</span><label class="switch"><input id="snapToggle" type="checkbox" checked><span></span></label></div>
           <div class="guide-control">
             <div class="guide-head">
               <div class="guide-title">参考线 <span id="guideCount">0</span></div>
-              <label class="switch" title="显示或隐藏参考线"><input id="guideToggle" type="checkbox" checked><span></span></label>
-            </div>
-            <div class="guide-sync-row" id="guideSyncRow">
-              <div class="guide-sync-copy">
-                <strong>同步到全部图片</strong>
-                <small id="guideSyncStatus">关闭后每张图片独立设置</small>
-              </div>
-              <label class="switch" title="在全部图片中保持相同的排版参考线位置"><input id="guideSyncToggle" type="checkbox"><span></span></label>
             </div>
             <div class="guide-actions">
               <button class="btn guide-btn" id="addVerticalGuideBtn"><span class="guide-icon">┃</span> 加竖线</button>
@@ -671,6 +688,7 @@
 
         <section class="panel-section">
           <h2 class="section-title">输出尺寸</h2>
+          <p class="settings-note" id="boardSizeNote" hidden>固定画布尺寸由“设置 → 画布与排版”统一控制。</p>
           <div class="number-row">
             <div class="number-box"><label for="outputW">宽度 px</label><input id="outputW" type="number" min="1" max="12000" value="0"></div>
             <div class="link-mark" title="保持裁剪比例">
@@ -788,6 +806,53 @@
     </div>
   </dialog>
 
+  <dialog class="settings-dialog" id="settingsDialog" aria-labelledby="settingsTitle">
+    <div class="settings-shell">
+      <div class="settings-header"><div><h2 id="settingsTitle">设置</h2><p>让工具按你的排版习惯工作</p></div><button class="icon-btn" id="closeSettingsBtn" aria-label="关闭设置">✕</button></div>
+      <div class="settings-tabs" role="tablist" aria-label="设置分类">
+        <button class="btn active" id="layoutTab" role="tab" aria-selected="true" aria-controls="layoutSettings">画布与排版</button>
+        <button class="btn" id="shortcutsTab" role="tab" aria-selected="false" aria-controls="shortcutSettings">快捷键</button>
+      </div>
+      <div class="settings-content">
+        <div id="layoutSettings" role="tabpanel" aria-labelledby="layoutTab">
+          <section class="settings-section">
+            <h3>工作模式</h3>
+            <select id="workspaceModeSelect" aria-label="工作模式"><option value="crop">普通裁图 · 自由调整裁剪框</option><option value="board">固定画布 · 图片作为独立图层</option></select>
+            <div id="boardSettings" hidden>
+              <div class="number-row"><div class="number-box"><label for="boardWidth">画布宽度 px</label><input id="boardWidth" type="number" min="1" max="12000" value="750"></div><span aria-hidden="true">×</span><div class="number-box"><label for="boardHeight">画布高度 px</label><input id="boardHeight" type="number" min="1" max="12000" value="1000"></div></div>
+              <button class="btn" id="applyBoardSizeBtn">应用画布尺寸</button>
+              <p class="settings-note">画布尺寸统一决定导出范围。参考线固定在画布坐标上，窗口缩放只改变预览。应用新尺寸时按相对位置缩放已有排版。</p>
+              <p class="settings-error" id="boardSizeError" role="status"></p>
+            </div>
+          </section>
+          <section class="settings-section">
+            <h3>图片排版</h3>
+            <div class="toggle-row"><label for="imageLockToggle">锁定当前图片，防止误调整</label><label class="switch"><input id="imageLockToggle" type="checkbox"><span></span></label></div>
+            <p class="settings-note" id="imageLockNote">先导入一张图片；锁定后仍可调整参考线。</p>
+            <div class="toggle-row"><label for="inheritPlacementToggle">新图沿用上一张的排版</label><label class="switch"><input id="inheritPlacementToggle" type="checkbox"><span></span></label></div>
+            <p class="settings-note">仅用于固定画布：未处理图片沿用上一张的显示宽度、相对位置及角度；已摆好的图片不会被覆盖。关闭后，新图居中完整显示。</p>
+          </section>
+          <section class="settings-section">
+            <h3>同步与辅助</h3>
+            <div class="guide-sync-row" id="guideSyncRow"><div class="guide-sync-copy"><strong>参考线同步到全部图片</strong><small id="guideSyncStatus">关闭后每张图片独立设置</small></div><label class="switch"><input id="guideSyncToggle" type="checkbox" aria-label="同步参考线"><span></span></label></div>
+            <div class="ratio-sync-chip" id="ratioSyncChip"><span id="ratioSyncStatus">比例独立</span><label class="switch"><input id="ratioSyncToggle" type="checkbox" aria-label="同步裁剪比例"><span></span></label></div>
+            <p class="settings-note" id="ratioSyncNote">裁剪比例同步用于普通裁图；固定画布统一使用画布比例。</p>
+            <div class="toggle-row"><label for="guideToggle">显示参考线</label><label class="switch"><input id="guideToggle" type="checkbox" checked><span></span></label></div>
+            <div class="toggle-row"><label for="gridToggle">显示构图网格</label><label class="switch"><input id="gridToggle" type="checkbox" checked><span></span></label></div>
+            <div class="toggle-row"><label for="snapToggle">吸附图片边缘和参考线</label><label class="switch"><input id="snapToggle" type="checkbox" checked><span></span></label></div>
+          </section>
+          <section class="settings-section"><h3>主题色</h3><div class="theme-switcher" role="group" aria-label="界面主题色">
+            <button class="theme-dot active" style="--theme-color:#d9ff66" data-theme="lime" title="青柠绿主题" aria-label="青柠绿主题"></button><button class="theme-dot" style="--theme-color:#5ac8fa" data-theme="blue" title="冰川蓝主题" aria-label="冰川蓝主题"></button><button class="theme-dot" style="--theme-color:#ad8cff" data-theme="violet" title="柔光紫主题" aria-label="柔光紫主题"></button><button class="theme-dot" style="--theme-color:#ff806e" data-theme="coral" title="珊瑚橙主题" aria-label="珊瑚橙主题"></button>
+          </div><p class="settings-note">偏好保存在当前浏览器。图片仅在本地处理；刷新页面后需重新导入图片。</p></section>
+        </div>
+        <div id="shortcutSettings" role="tabpanel" aria-labelledby="shortcutsTab" hidden>
+          <section class="settings-section"><div class="toggle-row"><label for="shortcutsEnabledToggle">启用快捷键</label><label class="switch"><input id="shortcutsEnabledToggle" type="checkbox" checked><span></span></label></div><p class="settings-note">点击键位后按下新组合键。Esc 取消，Backspace 清除。输入文字、数字或使用中文输入法时不触发操作。方向键配合 Shift 每次移动 10 像素。</p><p class="settings-error" id="shortcutMessage" role="status" aria-live="polite"></p><div id="shortcutList"></div></section>
+          <section class="settings-section"><button class="btn" id="resetShortcutsBtn">恢复默认快捷键</button><p class="settings-note">不使用 Ctrl/⌘ + W、R、L 等浏览器保留组合。已修改的键位会在当前浏览器中记住。</p></section>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
   <script>
     (() => {
       'use strict';
@@ -840,6 +905,10 @@
         defaultDirectoryHandle: null,
         sourceSubfolder: true,
         sourceSubfolderName: '裁剪结果'
+        ,workMode: 'crop', boardW: 750, boardH: 1000, boardViewScale: 1,
+        locked: false, inheritPlacement: false, lastBoardPlacement: null,
+        guideModes: { crop: { sync: false, template: [] }, board: { sync: true, template: [] } },
+        shortcutsEnabled: true, shortcutBindings: {}, capturingShortcut: null
       };
 
       const icons = {
@@ -847,19 +916,120 @@
         hitSize: 22
       };
 
+      const isBoard = () => state.workMode === 'board';
+      function boardPlacement() {
+        const scale = state.boardViewScale || 1;
+        return {
+          x: state.panX / scale / state.boardW, y: state.panY / scale / state.boardH,
+          width: state.sourceW * state.baseScale * state.zoom / scale / state.boardW,
+          rotation: state.rotation, fineRotation: state.fineRotation, flipX: state.flipX, flipY: state.flipY
+        };
+      }
+
+      function projectBoard(placement = null, guides = null) {
+        state.boardViewScale = Math.max(.0001, Math.min(Math.max(1, state.viewW - 64) / state.boardW, Math.max(1, state.viewH - 64) / state.boardH));
+        const w = state.boardW * state.boardViewScale, h = state.boardH * state.boardViewScale;
+        state.crop = { x: (state.viewW - w) / 2, y: (state.viewH - h) / 2, w, h };
+        state.ratio = state.boardW / state.boardH;
+        calculateBaseScale();
+        if (placement) {
+          state.panX = placement.x * w; state.panY = placement.y * h;
+          state.zoom = placement.width * w / Math.max(.0001, state.sourceW * state.baseScale);
+          state.rotation = placement.rotation; state.fineRotation = placement.fineRotation;
+          state.flipX = placement.flipX; state.flipY = placement.flipY;
+          // baseScale is independent of quarter turns in fixed-canvas mode.
+        }
+        if (guides) state.guides = relativeToGuides(guides);
+      }
+
+      function saveWorkspacePreferences() {
+        state.guideModes[state.workMode] = { sync: state.syncGuides, template: state.sharedGuides.map(g => ({ ...g })) };
+        try {
+          localStorage.setItem('crop-tool-workspace-v1', JSON.stringify({
+            workMode: state.workMode, boardW: state.boardW, boardH: state.boardH,
+            inheritPlacement: state.inheritPlacement, grid: state.grid, snap: state.snap,
+            guidesVisible: state.guidesVisible, guideModes: state.guideModes,
+            syncRatio: state.syncRatio, sharedRatio: state.sharedRatio,
+            shortcutsEnabled: state.shortcutsEnabled, shortcutBindings: state.shortcutBindings
+          }));
+        } catch (error) { /* preferences remain available for this session */ }
+      }
+
+      function modeSession(item) {
+        return { edit: item.edit, outputW: item.outputW, outputH: item.outputH, outputTouched: item.outputTouched,
+          undo: item.undo, redo: item.redo,
+          ...(item.pendingGuideTemplate ? { pendingGuideTemplate: item.pendingGuideTemplate } : {}),
+          ...(Object.prototype.hasOwnProperty.call(item, 'pendingRatio') ? { pendingRatio: item.pendingRatio } : {}) };
+      }
+
+      function setWorkMode(mode) {
+        if (state.exporting || state.interaction || !['crop', 'board'].includes(mode) || mode === state.workMode) return;
+        saveActiveItem();
+        state.guideModes[state.workMode] = { sync: state.syncGuides, template: state.sharedGuides.map(g => ({ ...g })) };
+        for (const item of state.items) {
+          item.sessions ||= {};
+          item.sessions[state.workMode] = modeSession(item);
+          const session = item.sessions[mode];
+          for (const key of ['edit', 'outputW', 'outputH', 'outputTouched', 'undo', 'redo', 'pendingGuideTemplate', 'pendingRatio']) delete item[key];
+          Object.assign(item, session || { edit: null, undo: [], redo: [] });
+        }
+        state.workMode = mode;
+        state.syncGuides = state.guideModes[mode].sync;
+        state.sharedGuides = state.guideModes[mode].template.map(g => ({ ...g }));
+        const id = state.activeItemId;
+        state.activeItemId = null;
+        if (id) activateItem(id, false);
+        else { state.locked = false; syncControls(); render(); }
+        saveWorkspacePreferences();
+      }
+
+      function applyBoardSize() {
+        const w = Number($('#boardWidth').value), h = Number($('#boardHeight').value);
+        if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1 || w > 12000 || h > 12000 || w * h > 80_000_000) {
+          $('#boardSizeError').textContent = '宽高请填写 1–12000 的整数，总像素不能超过 8000 万。';
+          return;
+        }
+        if (state.exporting) return;
+        const placement = state.image && isBoard() ? boardPlacement() : null;
+        const guides = state.image && isBoard() ? guidesToRelative() : null;
+        saveActiveItem();
+        state.boardW = w; state.boardH = h;
+        // A canvas-size change is a new layout boundary: do not undo into the old geometry.
+        if (isBoard()) { state.undo = []; state.redo = []; }
+        for (const item of state.items) {
+          const session = isBoard() ? item : item.sessions?.board;
+          if (session) { session.undo = []; session.redo = []; }
+        }
+        if (isBoard() && state.image) { projectBoard(placement, guides); updateOutputSize(true); saveActiveItem(); }
+        $('#boardSizeError').textContent = '';
+        saveWorkspacePreferences(); syncControls(); updateHistoryButtons(); render();
+        showToast(`画布已设为 ${w} × ${h} px`);
+      }
+
+      function toggleImageLock() {
+        if (!state.image || state.exporting) return;
+        state.locked = !state.locked;
+        saveActiveItem(); syncControls(); render();
+        showToast(state.locked ? '图片已锁定；仍可调整参考线' : '图片已解锁');
+      }
+
       function snapshot() {
         return {
           zoom: state.zoom, panX: state.panX, panY: state.panY,
           rotation: state.rotation, fineRotation: state.fineRotation,
           flipX: state.flipX, flipY: state.flipY, ratio: state.ratio,
-          crop: { ...state.crop }, grid: state.grid, mode: state.mode,
-          guides: state.guides.map(guide => ({ ...guide })), guidesVisible: state.guidesVisible
+          crop: { ...state.crop }, mode: state.mode, locked: state.locked,
+          guides: state.guides.map(guide => ({ ...guide })),
+          viewW: state.viewW, viewH: state.viewH,
+          ...(isBoard() ? { boardPlacement: boardPlacement(), boardGuides: guidesToRelative() } : {})
         };
       }
 
       function restore(s) {
-        const { guideEdit, ...edit } = s;
+        const { guideEdit, viewW, viewH, locked, boardPlacement: placement, boardGuides, ...edit } = s;
         Object.assign(state, edit, { crop: { ...s.crop }, guides: (s.guides || []).map(guide => ({ ...guide })) });
+        if (isBoard()) projectBoard(placement, boardGuides || []);
+        else reprojectCropEdit(viewW, viewH);
         // Image-only undo must keep the current shared layout, including changes made on another image.
         if (state.syncGuides && !guideEdit) state.guides = relativeToGuides();
         else syncSharedGuidesFromCurrent();
@@ -880,17 +1050,20 @@
         updateHistoryButtons();
       }
 
-      function action(fn) {
-        if (!state.image) return;
+      function action(fn, allowLocked = false) {
+        if (!state.image || state.exporting) return;
+        if (state.locked && !allowLocked) { showToast('图片已锁定，请在设置中或按快捷键解锁'); return; }
         const before = snapshot();
         fn();
         commit(before);
         syncControls();
         updateOutputSize();
         render();
+        if (isBoard() && !allowLocked) state.lastBoardPlacement = boardPlacement();
       }
 
       function undo() {
+        if (state.exporting || state.locked) return;
         if (!state.undo.length) return;
         const previous = state.undo.pop();
         state.redo.push({ ...snapshot(), guideEdit: previous.guideEdit });
@@ -899,6 +1072,7 @@
       }
 
       function redo() {
+        if (state.exporting || state.locked) return;
         if (!state.redo.length) return;
         const next = state.redo.pop();
         state.undo.push({ ...snapshot(), guideEdit: next.guideEdit });
@@ -907,8 +1081,8 @@
       }
 
       function updateHistoryButtons() {
-        $('#undoBtn').disabled = !state.undo.length;
-        $('#redoBtn').disabled = !state.redo.length;
+        $('#undoBtn').disabled = state.exporting || state.locked || !state.undo.length;
+        $('#redoBtn').disabled = state.exporting || state.locked || !state.redo.length;
       }
 
       function showToast(message) {
@@ -932,6 +1106,8 @@
 
       function resizeCanvas() {
         const rect = stage.getBoundingClientRect();
+        const placement = state.image && isBoard() ? boardPlacement() : null;
+        const boardGuides = state.image && isBoard() ? guidesToRelative() : null;
         const oldW = state.viewW || rect.width;
         const oldH = state.viewH || rect.height;
         state.viewW = Math.max(1, rect.width);
@@ -939,7 +1115,8 @@
         state.dpr = Math.min(window.devicePixelRatio || 1, 2);
         canvas.width = Math.round(state.viewW * state.dpr);
         canvas.height = Math.round(state.viewH * state.dpr);
-        if (state.image && oldW && oldH) {
+        if (state.image && isBoard()) projectBoard(placement, boardGuides);
+        else if (state.image && oldW && oldH) {
           const sx = state.viewW / oldW;
           const sy = state.viewH / oldH;
           state.crop.x *= sx; state.crop.w *= sx;
@@ -951,8 +1128,18 @@
         render();
       }
 
+      function reprojectCropEdit(oldW, oldH) {
+        if (!oldW || !oldH) return;
+        const sx = state.viewW / oldW, sy = state.viewH / oldH;
+        state.crop.x *= sx; state.crop.w *= sx; state.crop.y *= sy; state.crop.h *= sy;
+        state.panX *= sx; state.panY *= sy;
+        state.guides.forEach(g => { g.position *= g.axis === 'x' ? sx : sy; });
+        calculateBaseScale();
+      }
+
       function calculateBaseScale() {
         if (!state.image) return;
+        if (isBoard()) { state.baseScale = Math.min(state.boardW / state.sourceW, state.boardH / state.sourceH) * state.boardViewScale; return; }
         const pad = 42;
         const quarterTurn = Math.abs(Math.round(state.rotation / 90)) % 2 === 1;
         const rw = quarterTurn ? state.sourceH : state.sourceW;
@@ -962,6 +1149,7 @@
       }
 
       function setInitialCrop() {
+        if (isBoard()) { projectBoard(); return; }
         const scale = state.baseScale;
         const imgW = state.sourceW * scale;
         const imgH = state.sourceH * scale;
@@ -997,6 +1185,7 @@
         item.outputTouched = state.outputTouched;
         item.undo = cloneHistory(state.undo);
         item.redo = cloneHistory(state.redo);
+        if (isBoard() && !state.exporting) state.lastBoardPlacement = boardPlacement();
       }
 
       function guidesToRelative(guides = state.guides) {
@@ -1005,7 +1194,9 @@
         return guides.map(guide => ({
           id: guide.id,
           axis: guide.axis,
-          ratio: guide.position / Math.max(1, guide.axis === 'x' ? state.viewW : state.viewH)
+          ratio: isBoard()
+            ? (guide.position - (guide.axis === 'x' ? state.crop.x : state.crop.y)) / Math.max(.0001, guide.axis === 'x' ? state.crop.w : state.crop.h)
+            : guide.position / Math.max(1, guide.axis === 'x' ? state.viewW : state.viewH)
         }));
       }
 
@@ -1014,17 +1205,20 @@
         return template.map(guide => ({
           id: guide.id,
           axis: guide.axis,
-          position: guide.ratio * (guide.axis === 'x' ? state.viewW : state.viewH)
+          position: isBoard()
+            ? (guide.axis === 'x' ? state.crop.x : state.crop.y) + guide.ratio * (guide.axis === 'x' ? state.crop.w : state.crop.h)
+            : guide.ratio * (guide.axis === 'x' ? state.viewW : state.viewH)
         }));
       }
 
       function syncSharedGuidesFromCurrent() {
         if (!state.syncGuides || !state.image) return;
         state.sharedGuides = guidesToRelative();
+        saveWorkspacePreferences();
       }
 
       function setGuideSync(enabled) {
-        if (!state.image) return;
+        if (state.exporting) return;
         if (enabled) {
           state.syncGuides = true;
           state.sharedGuides = guidesToRelative();
@@ -1041,6 +1235,7 @@
         }
         syncControls();
         render();
+        saveWorkspacePreferences();
       }
 
       function ratioLabel(ratio = state.ratio) {
@@ -1053,6 +1248,7 @@
       }
 
       function reshapeCropToRatio(ratio) {
+        if (isBoard()) return;
         state.ratio = ratio;
         if (!ratio || !state.image) return;
         const c = state.crop;
@@ -1069,11 +1265,11 @@
       }
 
       function syncSharedRatioFromCurrent() {
-        if (state.syncRatio && state.image) state.sharedRatio = state.ratio;
+        if (state.syncRatio && state.image && !isBoard()) { state.sharedRatio = state.ratio; saveWorkspacePreferences(); }
       }
 
       function setRatioSync(enabled) {
-        if (!state.image) return;
+        if (state.exporting || isBoard()) return;
         if (enabled) {
           state.syncRatio = true;
           state.sharedRatio = state.ratio;
@@ -1089,6 +1285,7 @@
         }
         syncControls();
         render();
+        saveWorkspacePreferences();
       }
 
       function renderQueue() {
@@ -1133,6 +1330,7 @@
 
       function showEmptyWorkspace() {
         state.image = null;
+        state.locked = false;
         state.activeItemId = null;
         state.undo = [];
         state.redo = [];
@@ -1161,6 +1359,7 @@
       }
 
       function activateItem(id, saveCurrent = true) {
+        if (state.interaction) return;
         if (id === state.activeItemId && state.image) return;
         if (saveCurrent) saveActiveItem();
         const item = state.items.find(entry => entry.id === id);
@@ -1172,7 +1371,8 @@
         state.sourceH = item.image.naturalHeight;
         state.snapGuides = null;
         if (item.edit) {
-          Object.assign(state, item.edit, {
+          const { viewW, viewH, boardPlacement: placement, boardGuides, ...edit } = item.edit;
+          Object.assign(state, edit, {
             crop: { ...item.edit.crop },
             guides: (item.edit.guides || []).map(guide => ({ ...guide }))
           });
@@ -1180,6 +1380,8 @@
           state.redo = cloneHistory(item.redo || []);
           state.outputTouched = Boolean(item.outputTouched);
           calculateBaseScale();
+          if (isBoard()) projectBoard(placement, boardGuides || []);
+          else reprojectCropEdit(viewW, viewH);
           $('#outputW').value = item.outputW;
           $('#outputH').value = item.outputH;
         } else {
@@ -1190,33 +1392,38 @@
           state.fineRotation = 0;
           state.flipX = 1;
           state.flipY = 1;
+          state.locked = false;
+          state.mode = 'image';
           state.ratio = state.syncRatio ? state.sharedRatio : null;
           state.guides = [];
-          state.guidesVisible = true;
           state.undo = [];
           state.redo = [];
           state.outputTouched = false;
           calculateBaseScale();
           setInitialCrop();
+          if (isBoard() && state.inheritPlacement && state.lastBoardPlacement) projectBoard(state.lastBoardPlacement);
           updateOutputSize(true);
         }
         if (state.syncGuides) {
           state.guides = relativeToGuides();
-          state.guidesVisible = true;
         } else if (item.pendingGuideTemplate) {
           state.guides = relativeToGuides(item.pendingGuideTemplate);
           item.edit = item.edit || snapshot();
           item.edit.guides = state.guides.map(guide => ({ ...guide }));
           delete item.pendingGuideTemplate;
         }
-        if (state.syncRatio) {
+        if (state.syncRatio && !isBoard()) {
           reshapeCropToRatio(state.sharedRatio);
-        } else if (Object.prototype.hasOwnProperty.call(item, 'pendingRatio')) {
+        } else if (!isBoard() && Object.prototype.hasOwnProperty.call(item, 'pendingRatio')) {
           reshapeCropToRatio(item.pendingRatio);
           item.edit = item.edit || snapshot();
           item.edit.ratio = state.ratio;
           item.edit.crop = { ...state.crop };
           delete item.pendingRatio;
+        }
+        if (isBoard()) {
+          state.mode = state.mode === 'crop' ? 'image' : state.mode;
+          updateOutputSize(true);
         }
         emptyState.hidden = true;
         $('#fileName').textContent = state.fileName;
@@ -1228,6 +1435,7 @@
         updateHistoryButtons();
         renderQueue();
         render();
+        saveActiveItem();
       }
 
       function isImageFile(file) {
@@ -1261,16 +1469,19 @@
       }
 
       async function loadFiles(fileList) {
+        if (state.exporting) { showToast('正在导出，请完成后再导入图片'); return; }
         const files = [...fileList].filter(isImageFile);
         if (!files.length) { showToast('没有找到可用的图片'); return; }
         await loadFileEntries(files.map(file => ({ file })));
       }
 
       async function loadFileEntries(entries) {
+        if (state.exporting) return;
         const results = await Promise.all(entries.map((entry, index) => decodeQueueFile(entry.file, index, entry)));
         const added = results.filter(Boolean);
         if (!added.length) { showToast('这些图片无法读取，请换一批试试'); return; }
         const hadActive = Boolean(state.image);
+        if (state.exporting) { added.forEach(item => URL.revokeObjectURL(item.objectUrl)); return; }
         state.items.push(...added);
         renderQueue();
         if (!hadActive) activateItem(added[0].id, false);
@@ -1415,16 +1626,26 @@
       }
 
       function render() {
+        updateWorkspaceState();
         ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
         ctx.clearRect(0, 0, state.viewW, state.viewH);
         if (!state.image) return;
         const c = state.crop;
+        if (isBoard()) {
+          ctx.save(); ctx.beginPath(); ctx.rect(c.x, c.y, c.w, c.h); ctx.clip();
+          const tile = 12;
+          for (let y = c.y; y < c.y + c.h; y += tile) for (let x = c.x; x < c.x + c.w; x += tile) {
+            ctx.fillStyle = (Math.round((x - c.x) / tile) + Math.round((y - c.y) / tile)) % 2 ? '#242b26' : '#1a201c';
+            ctx.fillRect(x, y, tile, tile);
+          }
+        }
         const previewHasBackground = !$('#transparentToggle').checked || $('#formatSelect').value === 'image/jpeg';
         if (previewHasBackground) {
           ctx.fillStyle = $('#backgroundColor').value;
           ctx.fillRect(c.x, c.y, c.w, c.h);
         }
         drawImage(ctx);
+        if (isBoard()) ctx.restore();
 
         ctx.save();
         ctx.fillStyle = 'rgba(4, 5, 3, .68)';
@@ -1499,6 +1720,7 @@
       }
 
       function getHandles() {
+        if (isBoard()) return {};
         const c = state.crop;
         return {
           nw: { x: c.x, y: c.y }, n: { x: c.x + c.w / 2, y: c.y }, ne: { x: c.x + c.w, y: c.y },
@@ -1530,8 +1752,9 @@
       function guideSnapTargets(axis) {
         const bounds = imageBounds();
         const c = state.crop;
+        let targets;
         if (axis === 'x') {
-          return [
+          targets = [
             { position: (bounds.left + bounds.right) / 2, label: '图片垂直中线', kind: 'image-center' },
             { position: bounds.left, label: '图片左边缘', kind: 'image-edge' },
             { position: bounds.right, label: '图片右边缘', kind: 'image-edge' },
@@ -1539,8 +1762,7 @@
             { position: c.x, label: '裁剪框左边缘', kind: 'crop-edge' },
             { position: c.x + c.w, label: '裁剪框右边缘', kind: 'crop-edge' }
           ];
-        }
-        return [
+        } else targets = [
           { position: (bounds.top + bounds.bottom) / 2, label: '图片水平中线', kind: 'image-center' },
           { position: bounds.top, label: '图片上边缘', kind: 'image-edge' },
           { position: bounds.bottom, label: '图片下边缘', kind: 'image-edge' },
@@ -1548,6 +1770,8 @@
           { position: c.y, label: '裁剪框上边缘', kind: 'crop-edge' },
           { position: c.y + c.h, label: '裁剪框下边缘', kind: 'crop-edge' }
         ];
+        if (isBoard()) targets = [...targets.filter(t => t.kind.startsWith('crop')), ...targets.filter(t => !t.kind.startsWith('crop'))].map(t => ({ ...t, label: t.label.replace('裁剪框', '画布') }));
+        return targets;
       }
 
       function nearestGuideSnap(axis, position) {
@@ -1572,28 +1796,28 @@
           const sameAxisCount = state.guides.filter(guide => guide.axis === axis).length;
           const offsets = [0, 40, -40, 80, -80, 120, -120];
           const t = imageTransform();
-          const center = axis === 'x' ? t.cx : t.cy;
+          const center = isBoard() ? (axis === 'x' ? state.crop.x + state.crop.w / 2 : state.crop.y + state.crop.h / 2) : axis === 'x' ? t.cx : t.cy;
           const limit = axis === 'x' ? state.viewW : state.viewH;
           state.guides.push({
             id: globalThis.crypto?.randomUUID?.() || `guide-${Date.now()}-${Math.random()}`,
             axis,
-            position: clamp(center + offsets[sameAxisCount % offsets.length], 8, limit - 8)
+            position: clamp(center + offsets[sameAxisCount % offsets.length] * (isBoard() ? state.boardViewScale : 1), 8, limit - 8)
           });
           state.guidesVisible = true;
-        });
+        }, true);
         syncSharedGuidesFromCurrent();
         syncControls();
       }
 
       function removeGuide(id) {
-        action(() => { state.guides = state.guides.filter(guide => guide.id !== id); });
+        action(() => { state.guides = state.guides.filter(guide => guide.id !== id); }, true);
         syncSharedGuidesFromCurrent();
         syncControls();
       }
 
       function clearGuides() {
         if (!state.guides.length) { showToast('当前图片还没有参考线'); return; }
-        action(() => { state.guides = []; });
+        action(() => { state.guides = []; }, true);
         syncSharedGuidesFromCurrent();
         syncControls();
       }
@@ -1788,10 +2012,12 @@
       }
 
       canvas.addEventListener('pointerdown', (e) => {
-        if (!state.image) return;
+        if (!state.image || state.exporting || e.button !== 0) return;
+        canvas.focus({ preventScroll: true });
         const p = pointFromEvent(e);
         const handle = hitHandle(p.x, p.y);
         const guide = handle ? null : hitGuide(p.x, p.y);
+        if (!guide && state.locked) { showToast('图片已锁定，请在设置中解锁'); return; }
         if (!handle && !guide && state.mode !== 'rotate' && !insideCrop(p.x, p.y)) return;
         canvas.setPointerCapture(e.pointerId);
         state.interaction = {
@@ -1814,7 +2040,7 @@
           const handle = state.image ? hitHandle(p.x, p.y) : null;
           const guide = !handle && state.image ? hitGuide(p.x, p.y) : null;
           const cursors = { nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize', n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize' };
-          canvas.style.cursor = handle ? cursors[handle] : guide ? (guide.axis === 'x' ? 'ew-resize' : 'ns-resize') : state.mode === 'rotate' ? 'ew-resize' : insideCrop(p.x, p.y) ? (state.mode === 'image' ? 'grab' : 'move') : 'default';
+          canvas.style.cursor = guide ? (guide.axis === 'x' ? 'ew-resize' : 'ns-resize') : state.locked ? 'not-allowed' : handle ? cursors[handle] : state.mode === 'rotate' ? 'ew-resize' : insideCrop(p.x, p.y) ? (state.mode === 'image' ? 'grab' : 'move') : 'default';
           return;
         }
         const i = state.interaction;
@@ -1847,8 +2073,9 @@
         if (state.interaction.kind === 'guide') {
           const guide = state.guides.find(entry => entry.id === state.interaction.guideId);
           if (guide) {
-            const limit = guide.axis === 'x' ? state.viewW : state.viewH;
-            if (guide.position < 0 || guide.position > limit) state.guides = state.guides.filter(entry => entry.id !== guide.id);
+            const start = isBoard() ? (guide.axis === 'x' ? state.crop.x : state.crop.y) : 0;
+            const limit = isBoard() ? start + (guide.axis === 'x' ? state.crop.w : state.crop.h) : guide.axis === 'x' ? state.viewW : state.viewH;
+            if (guide.position < start || guide.position > limit) state.guides = state.guides.filter(entry => entry.id !== guide.id);
           }
         }
         if (state.interaction.moved) commit(state.interaction.before);
@@ -1856,6 +2083,7 @@
         state.interaction = null;
         state.snapGuides = null;
         state.rotationFeedback = null;
+        if (isBoard() && state.interaction?.kind !== 'guide') state.lastBoardPlacement = boardPlacement();
         canvas.style.cursor = 'default';
         render();
       }
@@ -1871,9 +2099,10 @@
       canvas.addEventListener('wheel', (e) => {
         if (!state.image) return;
         e.preventDefault();
+        if (state.locked || state.exporting) return;
         const before = snapshot();
         const oldZoom = state.zoom;
-        const next = clamp(oldZoom * Math.exp(-e.deltaY * .0012), .5, 3);
+        const next = clamp(oldZoom * Math.exp(-e.deltaY * .0012), isBoard() ? .05 : .5, isBoard() ? Math.max(20, oldZoom) : 3);
         const p = pointFromEvent(e);
         const cx = state.viewW / 2 + state.panX;
         const cy = state.viewH / 2 + state.panY;
@@ -1889,6 +2118,7 @@
       }, { passive: false });
 
       function applyRatio(value) {
+        if (isBoard()) return;
         action(() => {
           reshapeCropToRatio(value === 'free' ? null : Number(value));
           syncSharedRatioFromCurrent();
@@ -1915,6 +2145,8 @@
       }
 
       function syncControls() {
+        $('#zoomSlider').min = isBoard() ? 5 : 50;
+        $('#zoomSlider').max = isBoard() ? Math.max(2000, Math.ceil(state.zoom * 100)) : 300;
         $('#zoomSlider').value = Math.round(state.zoom * 100);
         $('#zoomValue').textContent = `${Math.round(state.zoom * 100)}%`;
         $('#fineRotateSlider').value = state.fineRotation;
@@ -1928,22 +2160,51 @@
           ? `已同步 · ${state.items.length} 张 · 固定排版位置`
           : state.items.length > 1 ? '关闭后每张图片独立设置' : '导入多张图片后可同步';
         $('#ratioSyncToggle').checked = state.syncRatio;
+        $('#ratioSyncToggle').disabled = isBoard() || state.exporting;
         $('#ratioSyncChip').classList.toggle('active', state.syncRatio);
-        $('#ratioSyncStatus').textContent = state.syncRatio
+        $('#ratioSyncStatus').textContent = isBoard() ? '固定画布统一使用画布比例' : state.syncRatio
           ? `同步 ${ratioLabel(state.sharedRatio)} · ${state.items.length}张`
           : '比例独立';
         $('#guideCount').textContent = state.guides.length;
         $('#clearGuidesBtn').disabled = state.guides.length === 0;
         $$('#ratioGroup .ratio-btn').forEach(btn => {
+          btn.disabled = isBoard() || state.exporting;
           const v = btn.dataset.ratio;
           btn.classList.toggle('active', state.ratio === null ? v === 'free' : Math.abs(Number(v) - state.ratio) < .00001);
         });
-        $$('.mode-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === state.mode));
+        $$('.mode-btn').forEach(btn => { btn.classList.toggle('active', btn.dataset.mode === state.mode); btn.disabled = state.exporting || (isBoard() && btn.dataset.mode === 'crop'); });
         $('#rotateCanvasBtn').classList.toggle('active', state.mode === 'rotate');
         syncDestinationUI();
+        syncSettingsUI();
+        updateHistoryButtons();
+      }
+
+      function updateWorkspaceState() {
+        stage.classList.toggle('is-board', isBoard());
+        $('#workspaceState').textContent = `${isBoard() ? `固定画布 ${state.boardW} × ${state.boardH} px` : '普通裁图'}${state.image ? state.locked ? ' · 图片已锁定' : ' · 图片可调整' : ' · 等待导入图片'}`;
+        $('#workspaceState').classList.toggle('locked', state.locked && !!state.image);
+      }
+
+      function syncSettingsUI() {
+        $('#workspaceModeSelect').value = state.workMode;
+        $('#boardSettings').hidden = !isBoard();
+        $('#imageLockToggle').checked = state.locked && !!state.image;
+        $('#imageLockToggle').disabled = !state.image || state.exporting;
+        $('#imageLockNote').textContent = state.image ? `${state.fileName} · ${state.locked ? '已锁定；仍可调整参考线' : '未锁定'}` : '先导入一张图片；锁定后仍可调整参考线。';
+        $('#inheritPlacementToggle').checked = state.inheritPlacement;
+        $('#shortcutsEnabledToggle').checked = state.shortcutsEnabled;
+        $('#boardSizeNote').hidden = !isBoard();
+        $('#outputW').disabled = isBoard() || state.exporting;
+        $('#outputH').disabled = isBoard() || state.exporting;
+        for (const id of ['zoomSlider', 'fineRotateSlider', 'resetZoomBtn', 'resetFineRotateBtn', 'rotateLeftBtn', 'rotateRightBtn', 'resetAngleBtn', 'flipXBtn', 'flipYBtn', 'fitBtn', 'resetBtn']) {
+          $(`#${id}`).disabled = !state.image || state.locked || state.exporting;
+        }
+        for (const id of ['workspaceModeSelect', 'applyBoardSizeBtn', 'boardWidth', 'boardHeight', 'inheritPlacementToggle', 'guideSyncToggle', 'gridToggle', 'snapToggle', 'guideToggle']) $(`#${id}`).disabled = state.exporting;
+        updateWorkspaceState();
       }
 
       function naturalCropSize() {
+        if (isBoard()) return { w: state.boardW, h: state.boardH };
         const scale = state.baseScale * state.zoom;
         return {
           w: Math.max(1, Math.round(state.crop.w / scale)),
@@ -1969,6 +2230,7 @@
 
       function setOutputFromWidth() {
         if (!state.image) return;
+        if (isBoard()) { updateOutputSize(true); return; }
         const w = clamp(Number($('#outputW').value) || 1, 1, 12000);
         const h = Math.max(1, Math.round(w * state.crop.h / state.crop.w));
         $('#outputW').value = w;
@@ -1978,6 +2240,7 @@
 
       function setOutputFromHeight() {
         if (!state.image) return;
+        if (isBoard()) { updateOutputSize(true); return; }
         const h = clamp(Number($('#outputH').value) || 1, 1, 12000);
         const w = Math.max(1, Math.round(h * state.crop.w / state.crop.h));
         $('#outputH').value = h;
@@ -2416,6 +2679,8 @@
         $('#qualitySlider').disabled = busy || $('#formatSelect').value === 'image/png';
         $('#jpgSizeLimitToggle').disabled = busy;
         $('#jpgMaxSize').disabled = busy || !$('#jpgSizeLimitToggle').checked;
+        for (const id of ['settingsBtn', 'chooseBtn', 'newImageBtn', 'addMoreBtn', 'chooseImportFolderBtn', 'addFolderBtn', 'rotateCanvasBtn', 'clearGuidesBtn', 'addVerticalGuideBtn', 'addHorizontalGuideBtn']) $(`#${id}`).disabled = busy;
+        syncControls();
       }
 
       async function exportImage() {
@@ -2547,7 +2812,195 @@
         $$('.color-swatch').forEach(btn => btn.classList.toggle('active', btn.dataset.color === current));
       }
 
+      const shortcutDefinitions = [
+        ['moveImage', '移动图片', 'V'], ['moveCrop', '移动裁剪框（普通裁图）', 'C'], ['rotate', '拖动旋转', 'R'],
+        ['lock', '锁定 / 解锁当前图片', 'L'], ['guides', '显示 / 隐藏参考线', 'G'],
+        ['horizontal', '添加横向参考线', 'Shift+H'], ['vertical', '添加竖向参考线', 'Shift+V'],
+        ['left', '向左微调（Shift 为 10 像素）', 'ArrowLeft'], ['right', '向右微调（Shift 为 10 像素）', 'ArrowRight'],
+        ['up', '向上微调（Shift 为 10 像素）', 'ArrowUp'], ['down', '向下微调（Shift 为 10 像素）', 'ArrowDown'],
+        ['previous', '上一张图片', '['], ['next', '下一张图片', ']'],
+        ['undo', '撤销', 'Ctrl+Z'], ['redo', '重做', 'Ctrl+Shift+Z'], ['redoAlt', '重做（备用）', 'Ctrl+Y'],
+        ['export', '导出当前图片', 'Enter'], ['exportAll', '批量导出', 'Ctrl+Shift+Enter'],
+        ['fit', '图片居中适应画布', 'F'], ['zoomIn', '放大图片', '='], ['zoomOut', '缩小图片', '-'],
+        ['zero', '旋转角度归零', '0'], ['help', '打开快捷键设置', '?']
+      ];
+      const defaultShortcuts = Object.fromEntries(shortcutDefinitions.map(([id, , key]) => [id, key]));
+      const shortcutLabels = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Enter: 'Enter', ' ': 'Space' };
+
+      function displayShortcut(key) {
+        return key ? key.split('+').map(part => shortcutLabels[part] || part).join(' + ') : '未设置';
+      }
+
+      function keyCombination(e) {
+        if (['Control', 'Meta', 'Shift', 'Alt', 'AltGraph', 'Dead', 'Unidentified', 'Process'].includes(e.key)) return null;
+        let key = e.key === ' ' ? 'Space' : e.key.length === 1 && /[a-z]/i.test(e.key) ? e.key.toUpperCase() : e.key;
+        const parts = [];
+        if (e.ctrlKey || e.metaKey) parts.push('Ctrl');
+        if (e.altKey) parts.push('Alt');
+        if (e.shiftKey && key !== '?') parts.push('Shift');
+        return [...parts, key].join('+');
+      }
+
+      function reservedShortcut(key) {
+        return /(^|\+)(Tab|Escape|F\d{1,2}|Meta)$/.test(key) || key.startsWith('Alt+') ||
+          /^Ctrl\+(Shift\+)?(W|T|N|R|L|O|P|F|S|H|J|D|U|Q|K|E|A|C|V|X|Backspace|Delete|[0-9=+\-])$/.test(key);
+      }
+
+      function renderShortcutList() {
+        const list = $('#shortcutList');
+        list.replaceChildren();
+        for (const [id, label] of shortcutDefinitions) {
+          const row = document.createElement('div'); row.className = 'shortcut-row';
+          const text = document.createElement('span'); text.textContent = label;
+          const button = document.createElement('button'); button.type = 'button'; button.className = 'shortcut-key';
+          button.dataset.shortcut = id;
+          button.textContent = state.capturingShortcut === id ? '请按键…' : displayShortcut(state.shortcutBindings[id]);
+          button.classList.toggle('listening', state.capturingShortcut === id);
+          button.setAttribute('aria-label', `修改${label}快捷键：${displayShortcut(state.shortcutBindings[id])}`);
+          button.addEventListener('click', () => {
+            state.capturingShortcut = id;
+            $('#shortcutMessage').textContent = '按下新的快捷键；Esc 取消，Backspace 清除。';
+            renderShortcutList();
+            $(`[data-shortcut="${id}"]`).focus({ preventScroll: true });
+          });
+          row.append(text, button); list.append(row);
+        }
+      }
+
+      function selectSettingsTab(tab) {
+        state.capturingShortcut = null;
+        const shortcuts = tab === 'shortcuts';
+        $('#layoutSettings').hidden = shortcuts; $('#shortcutSettings').hidden = !shortcuts;
+        $('#layoutTab').classList.toggle('active', !shortcuts); $('#shortcutsTab').classList.toggle('active', shortcuts);
+        $('#layoutTab').setAttribute('aria-selected', String(!shortcuts)); $('#shortcutsTab').setAttribute('aria-selected', String(shortcuts));
+        $('#layoutTab').tabIndex = shortcuts ? -1 : 0; $('#shortcutsTab').tabIndex = shortcuts ? 0 : -1;
+        $('#shortcutMessage').textContent = '';
+        if (shortcuts) renderShortcutList();
+        $('.settings-content').scrollTop = 0;
+      }
+
+      function openSettings(tab = 'layout') {
+        if (state.exporting || state.interaction) return;
+        $('#boardWidth').value = state.boardW; $('#boardHeight').value = state.boardH;
+        $('#boardSizeError').textContent = '';
+        selectSettingsTab(tab); syncControls();
+        if (!$('#settingsDialog').open) $('#settingsDialog').showModal();
+        (tab === 'shortcuts' ? $('#shortcutsTab') : $('#workspaceModeSelect')).focus({ preventScroll: true });
+      }
+
+      function closeSettings() {
+        state.capturingShortcut = null;
+        $('#settingsDialog').close();
+        $('#settingsBtn').focus({ preventScroll: true });
+      }
+
+      function setTool(mode) {
+        if (!state.image || state.exporting) return;
+        if (mode === 'crop' && isBoard()) { showToast('固定画布不可移动裁框；工作模式可在设置中切换'); return; }
+        state.mode = mode; syncControls(); render();
+      }
+
+      function nudgeImage(id, amount) {
+        if (state.locked) { showToast('图片已锁定，请先解锁'); return; }
+        action(() => {
+          const delta = isBoard() ? amount * state.boardViewScale : amount;
+          if (state.mode === 'crop' && !isBoard()) {
+            if (id === 'left') state.crop.x -= amount;
+            if (id === 'right') state.crop.x += amount;
+            if (id === 'up') state.crop.y -= amount;
+            if (id === 'down') state.crop.y += amount;
+            state.crop.x = clamp(state.crop.x, 8, state.viewW - state.crop.w - 8);
+            state.crop.y = clamp(state.crop.y, 8, state.viewH - state.crop.h - 8);
+          } else {
+            if (id === 'left') state.panX -= delta;
+            if (id === 'right') state.panX += delta;
+            if (id === 'up') state.panY -= delta;
+            if (id === 'down') state.panY += delta;
+          }
+        });
+      }
+
+      function runShortcut(id, e) {
+        if (id === 'help') { openSettings('shortcuts'); return; }
+        if (!state.image) return;
+        if (['left', 'right', 'up', 'down'].includes(id)) { nudgeImage(id, e.shiftKey ? 10 : 1); return; }
+        if (id === 'previous' || id === 'next') {
+          const index = state.items.findIndex(item => item.id === state.activeItemId);
+          const next = state.items[index + (id === 'next' ? 1 : -1)];
+          if (next) activateItem(next.id);
+          return;
+        }
+        const operations = {
+          moveImage: () => setTool('image'), moveCrop: () => setTool('crop'), rotate: () => setTool('rotate'),
+          lock: toggleImageLock, guides: () => { state.guidesVisible = !state.guidesVisible; saveWorkspacePreferences(); syncControls(); render(); },
+          horizontal: () => addGuide('y'), vertical: () => addGuide('x'), undo, redo, redoAlt: redo,
+          export: exportImage, exportAll: exportAllImages, fit: fitImage,
+          zero: () => action(() => { state.rotation = 0; state.fineRotation = 0; calculateBaseScale(); }),
+          zoomIn: () => action(() => { state.zoom = clamp(state.zoom * 1.1, isBoard() ? .05 : .5, isBoard() ? Math.max(20, state.zoom) : 3); }),
+          zoomOut: () => action(() => { state.zoom = clamp(state.zoom / 1.1, isBoard() ? .05 : .5, isBoard() ? Math.max(20, state.zoom) : 3); })
+        };
+        operations[id]?.();
+      }
+
+      function onShortcutKey(e) {
+        if (e.isComposing || e.keyCode === 229) return;
+        if (state.capturingShortcut && $('#settingsDialog').open) {
+          e.preventDefault(); e.stopPropagation();
+          const id = state.capturingShortcut;
+          if (e.key === 'Escape') { state.capturingShortcut = null; $('#shortcutMessage').textContent = '已取消修改。'; renderShortcutList(); return; }
+          const key = e.key === 'Backspace' || e.key === 'Delete' ? null : keyCombination(e);
+          if (key === null && !['Backspace', 'Delete'].includes(e.key)) return;
+          if (key && reservedShortcut(key)) { $('#shortcutMessage').textContent = '这个组合保留给浏览器，请换一个快捷键。'; return; }
+          const conflict = shortcutDefinitions.find(([other]) => other !== id && key && state.shortcutBindings[other] === key);
+          const nudgeVariant = key?.startsWith('Shift+') && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(key.slice(6));
+          if (conflict || nudgeVariant) { $('#shortcutMessage').textContent = `与“${conflict?.[1] || 'Shift 方向键微调'}”冲突，请换一个键位。`; return; }
+          state.shortcutBindings[id] = key; state.capturingShortcut = null;
+          saveWorkspacePreferences(); renderShortcutList(); $('#shortcutMessage').textContent = key ? `已改为 ${displayShortcut(key)}` : '已清除这个快捷键。';
+          $(`[data-shortcut="${id}"]`).focus({ preventScroll: true });
+          return;
+        }
+        if ($('#settingsDialog').open || $('#sourcePermissionDialog').open || state.exporting || state.interaction || !state.shortcutsEnabled) return;
+        const target = e.target;
+        if (target.closest('input, select, textarea, [contenteditable]:not([contenteditable="false"])')) return;
+        // Keep native activation on focused controls (especially Enter/Space).
+        if ((e.key === 'Enter' || e.key === ' ') && !e.ctrlKey && !e.metaKey && !e.altKey && target.closest('button, a')) return;
+        const key = keyCombination(e);
+        let definition = shortcutDefinitions.find(([id]) => state.shortcutBindings[id] && state.shortcutBindings[id] === key);
+        if (!definition && e.shiftKey && e.key.startsWith('Arrow') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          definition = shortcutDefinitions.find(([id]) => ['left', 'right', 'up', 'down'].includes(id) && state.shortcutBindings[id] === e.key);
+        }
+        if (!definition) return;
+        e.preventDefault();
+        if (e.repeat && !['left', 'right', 'up', 'down', 'zoomIn', 'zoomOut'].includes(definition[0])) return;
+        runShortcut(definition[0], e);
+      }
+
       $('#chooseBtn').addEventListener('click', () => fileInput.click());
+      $('#settingsBtn').addEventListener('click', () => openSettings());
+      $('#closeSettingsBtn').addEventListener('click', closeSettings);
+      $('#settingsDialog').addEventListener('cancel', e => { e.preventDefault(); closeSettings(); });
+      $('#settingsDialog').addEventListener('click', e => {
+        if (e.target !== $('#settingsDialog')) return;
+        const rect = e.target.getBoundingClientRect();
+        if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) closeSettings();
+      });
+      $('#layoutTab').addEventListener('click', () => selectSettingsTab('layout'));
+      $('#shortcutsTab').addEventListener('click', () => selectSettingsTab('shortcuts'));
+      $('.settings-tabs').addEventListener('keydown', e => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+        e.preventDefault();
+        const tab = e.key === 'Home' ? 'layout' : e.key === 'End' ? 'shortcuts' : $('#layoutSettings').hidden ? 'layout' : 'shortcuts';
+        selectSettingsTab(tab); $(tab === 'layout' ? '#layoutTab' : '#shortcutsTab').focus();
+      });
+      $('#workspaceModeSelect').addEventListener('change', e => setWorkMode(e.target.value));
+      $('#applyBoardSizeBtn').addEventListener('click', applyBoardSize);
+      $('#imageLockToggle').addEventListener('change', toggleImageLock);
+      $('#inheritPlacementToggle').addEventListener('change', e => { state.inheritPlacement = e.target.checked; saveWorkspacePreferences(); });
+      $('#shortcutsEnabledToggle').addEventListener('change', e => { state.shortcutsEnabled = e.target.checked; saveWorkspacePreferences(); });
+      $('#resetShortcutsBtn').addEventListener('click', () => {
+        state.shortcutBindings = { ...defaultShortcuts }; state.capturingShortcut = null;
+        saveWorkspacePreferences(); renderShortcutList(); $('#shortcutMessage').textContent = '已恢复默认快捷键。';
+      });
       $('#newImageBtn').addEventListener('click', () => fileInput.click());
       $('#addMoreBtn').addEventListener('click', () => fileInput.click());
       $('#chooseImportFolderBtn').addEventListener('click', importFolder);
@@ -2564,27 +3017,27 @@
       $('#fitBtn').addEventListener('click', fitImage);
       $('#rotateLeftBtn').addEventListener('click', () => action(() => { state.rotation -= 90; calculateBaseScale(); }));
       $('#rotateRightBtn').addEventListener('click', () => action(() => { state.rotation += 90; calculateBaseScale(); }));
-      $('#rotateCanvasBtn').addEventListener('click', () => { state.mode = state.mode === 'rotate' ? 'image' : 'rotate'; syncControls(); render(); });
+      $('#rotateCanvasBtn').addEventListener('click', () => setTool(state.mode === 'rotate' ? 'image' : 'rotate'));
       $('#resetAngleBtn').addEventListener('click', () => action(() => { state.rotation = 0; state.fineRotation = 0; calculateBaseScale(); }));
       $('#flipXBtn').addEventListener('click', () => action(() => state.flipX *= -1));
       $('#flipYBtn').addEventListener('click', () => action(() => state.flipY *= -1));
       $$('#ratioGroup .ratio-btn').forEach(btn => btn.addEventListener('click', () => applyRatio(btn.dataset.ratio)));
       $('#ratioSyncToggle').addEventListener('change', (e) => setRatioSync(e.target.checked));
-      $$('.mode-btn').forEach(btn => btn.addEventListener('click', () => { state.mode = btn.dataset.mode; syncControls(); }));
+      $$('.mode-btn').forEach(btn => btn.addEventListener('click', () => setTool(btn.dataset.mode)));
 
       let zoomBefore = null;
       $('#zoomSlider').addEventListener('pointerdown', () => zoomBefore = snapshot());
-      $('#zoomSlider').addEventListener('input', (e) => { if (!state.image) return; state.zoom = Number(e.target.value) / 100; syncControls(); updateOutputSize(); render(); });
+      $('#zoomSlider').addEventListener('input', (e) => { if (!state.image || state.locked || state.exporting) return; zoomBefore ||= snapshot(); state.zoom = Number(e.target.value) / 100; syncControls(); updateOutputSize(); render(); });
       $('#zoomSlider').addEventListener('change', () => { commit(zoomBefore); zoomBefore = null; });
       let rotateBefore = null;
       $('#fineRotateSlider').addEventListener('pointerdown', () => rotateBefore = snapshot());
-      $('#fineRotateSlider').addEventListener('input', (e) => { if (!state.image) return; state.fineRotation = Number(e.target.value); syncControls(); render(); });
+      $('#fineRotateSlider').addEventListener('input', (e) => { if (!state.image || state.locked || state.exporting) return; rotateBefore ||= snapshot(); state.fineRotation = Number(e.target.value); syncControls(); render(); });
       $('#fineRotateSlider').addEventListener('change', () => { commit(rotateBefore); rotateBefore = null; });
       $('#resetZoomBtn').addEventListener('click', () => action(() => { state.zoom = 1; }));
       $('#resetFineRotateBtn').addEventListener('click', () => action(() => { state.fineRotation = 0; }));
-      $('#gridToggle').addEventListener('change', (e) => action(() => state.grid = e.target.checked));
-      $('#snapToggle').addEventListener('change', (e) => { state.snap = e.target.checked; state.snapGuides = null; render(); });
-      $('#guideToggle').addEventListener('change', (e) => action(() => state.guidesVisible = e.target.checked));
+      $('#gridToggle').addEventListener('change', e => { state.grid = e.target.checked; saveWorkspacePreferences(); render(); });
+      $('#snapToggle').addEventListener('change', (e) => { state.snap = e.target.checked; state.snapGuides = null; saveWorkspacePreferences(); render(); });
+      $('#guideToggle').addEventListener('change', e => { state.guidesVisible = e.target.checked; saveWorkspacePreferences(); render(); });
       $('#guideSyncToggle').addEventListener('change', (e) => setGuideSync(e.target.checked));
       $('#addVerticalGuideBtn').addEventListener('click', () => addGuide('x'));
       $('#addHorizontalGuideBtn').addEventListener('click', () => addGuide('y'));
@@ -2625,39 +3078,14 @@
       });
 
       document.addEventListener('paste', (e) => {
+        if (e.target.closest('input, textarea, [contenteditable]:not([contenteditable="false"])')) return;
         const files = [...e.clipboardData.items].filter(item => item.type.startsWith('image/')).map(item => item.getAsFile()).filter(Boolean);
         if (files.length) loadFiles(files);
       });
 
       window.addEventListener('beforeunload', () => state.items.forEach(item => URL.revokeObjectURL(item.objectUrl)));
 
-      document.addEventListener('keydown', (e) => {
-        if ($('#sourcePermissionDialog').open) return;
-        const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName);
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-          e.preventDefault(); e.shiftKey ? redo() : undo(); return;
-        }
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
-        if (!state.image || typing) return;
-        if (e.key === 'Enter') { e.preventDefault(); exportImage(); return; }
-        if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) {
-          e.preventDefault();
-          const amount = e.shiftKey ? 10 : 1;
-          action(() => {
-            const target = state.mode === 'image' ? state : state.crop;
-            const xKey = state.mode === 'image' ? 'panX' : 'x';
-            const yKey = state.mode === 'image' ? 'panY' : 'y';
-            if (e.key === 'ArrowLeft') target[xKey] -= amount;
-            if (e.key === 'ArrowRight') target[xKey] += amount;
-            if (e.key === 'ArrowUp') target[yKey] -= amount;
-            if (e.key === 'ArrowDown') target[yKey] += amount;
-            if (state.mode === 'crop') {
-              state.crop.x = clamp(state.crop.x, 8, state.viewW - state.crop.w - 8);
-              state.crop.y = clamp(state.crop.y, 8, state.viewH - state.crop.h - 8);
-            }
-          });
-        }
-      });
+      document.addEventListener('keydown', onShortcutKey);
 
       let savedTheme = 'lime';
       try {
@@ -2669,12 +3097,37 @@
         const savedMaxMb = Number(localStorage.getItem('crop-tool-jpg-max-mb'));
         if (Number.isFinite(savedMaxMb) && savedMaxMb >= 0.001) $('#jpgMaxSize').value = savedMaxMb;
       } catch (error) { /* use defaults */ }
+      state.shortcutBindings = { ...defaultShortcuts };
+      try {
+        const preferences = JSON.parse(localStorage.getItem('crop-tool-workspace-v1') || 'null');
+        if (preferences) {
+          state.workMode = preferences.workMode === 'board' ? 'board' : 'crop';
+          if (Number.isInteger(preferences.boardW) && Number.isInteger(preferences.boardH) && preferences.boardW >= 1 && preferences.boardH >= 1 && preferences.boardW <= 12000 && preferences.boardH <= 12000 && preferences.boardW * preferences.boardH <= 80_000_000) { state.boardW = preferences.boardW; state.boardH = preferences.boardH; }
+          for (const key of ['inheritPlacement', 'grid', 'snap', 'guidesVisible', 'syncRatio', 'shortcutsEnabled']) if (typeof preferences[key] === 'boolean') state[key] = preferences[key];
+          if (preferences.sharedRatio === null || Number.isFinite(preferences.sharedRatio) && preferences.sharedRatio > 0) state.sharedRatio = preferences.sharedRatio;
+          for (const mode of ['crop', 'board']) {
+            const value = preferences.guideModes?.[mode];
+            if (value && typeof value.sync === 'boolean' && Array.isArray(value.template)) state.guideModes[mode] = { sync: value.sync, template: value.template.slice(0, 200).filter(g => ['x', 'y'].includes(g.axis) && Number.isFinite(g.ratio) && g.ratio >= 0 && g.ratio <= 1 && typeof g.id === 'string').map(g => ({ id: g.id, axis: g.axis, ratio: g.ratio })) };
+          }
+          const used = new Set();
+          for (const [id] of shortcutDefinitions) {
+            const candidate = Object.prototype.hasOwnProperty.call(preferences.shortcutBindings || {}, id) ? preferences.shortcutBindings[id] : defaultShortcuts[id];
+            if (candidate === null) { state.shortcutBindings[id] = null; continue; }
+            if (typeof candidate === 'string' && candidate.length <= 40 && !reservedShortcut(candidate) && !used.has(candidate)) { state.shortcutBindings[id] = candidate; used.add(candidate); }
+            else state.shortcutBindings[id] = null;
+          }
+        }
+      } catch (error) { /* ignore malformed or unavailable saved preferences */ }
+      state.syncGuides = state.guideModes[state.workMode].sync;
+      state.sharedGuides = state.guideModes[state.workMode].template.map(g => ({ ...g }));
+      $('#boardWidth').value = state.boardW; $('#boardHeight').value = state.boardH;
       setTheme(savedTheme, false);
       setExportMode(state.exportMode, false);
       restoreDefaultDirectoryHandle();
       const observer = new ResizeObserver(resizeCanvas);
       observer.observe(stage);
       $('#sidePanel').classList.add('disabled');
+      syncControls();
       updateFormatUI();
       resizeCanvas();
     })();
