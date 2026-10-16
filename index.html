@@ -1529,6 +1529,88 @@
         };
       }
 
+      function imageCorners() {
+        const t = imageTransform();
+        const halfW = state.sourceW * t.scale / 2;
+        const halfH = state.sourceH * t.scale / 2;
+        const cos = Math.cos(t.angle), sin = Math.sin(t.angle);
+        const points = {
+          nw: [-halfW, -halfH], ne: [halfW, -halfH],
+          se: [halfW, halfH], sw: [-halfW, halfH]
+        };
+        return Object.fromEntries(Object.entries(points).map(([name, [x, y]]) => {
+          x *= state.flipX; y *= state.flipY;
+          return [name, { x: t.cx + x * cos - y * sin, y: t.cy + x * sin + y * cos }];
+        }));
+      }
+
+      function drawBoardImageSelection(context) {
+        if (!isBoard() || !state.image) return;
+        const corners = imageCorners();
+        context.save();
+        context.beginPath();
+        context.moveTo(corners.nw.x, corners.nw.y);
+        context.lineTo(corners.ne.x, corners.ne.y);
+        context.lineTo(corners.se.x, corners.se.y);
+        context.lineTo(corners.sw.x, corners.sw.y);
+        context.closePath();
+        context.strokeStyle = 'rgba(0,0,0,.8)';
+        context.lineWidth = 3;
+        context.stroke();
+        context.strokeStyle = state.locked ? 'rgba(255,255,255,.95)' : uiColor('--accent');
+        context.lineWidth = state.locked ? 2 : 1.5;
+        context.setLineDash([5, 3]);
+        context.shadowColor = state.locked ? 'transparent' : uiColor('--accent');
+        context.shadowBlur = state.locked ? 0 : 4;
+        context.stroke();
+        context.setLineDash([]);
+        context.shadowBlur = 0;
+
+        if (!state.locked) {
+          for (const point of Object.values(corners)) {
+            context.beginPath();
+            context.rect(point.x - 7, point.y - 7, 14, 14);
+            context.fillStyle = '#f7f8f2';
+            context.fill();
+            context.strokeStyle = '#172015';
+            context.lineWidth = 1;
+            context.stroke();
+            context.beginPath();
+            context.rect(point.x - 4, point.y - 4, 8, 8);
+            context.fillStyle = uiColor('--accent');
+            context.fill();
+          }
+        }
+        context.restore();
+        drawBoardImageReadout(context, corners);
+      }
+
+      function drawBoardImageReadout(context, corners) {
+        const xs = Object.values(corners).map(point => point.x);
+        const ys = Object.values(corners).map(point => point.y);
+        const scale = state.boardViewScale || 1;
+        const x = Math.round((Math.min(...xs) - state.crop.x) / scale);
+        const y = Math.round((Math.min(...ys) - state.crop.y) / scale);
+        const w = Math.max(1, Math.round((Math.max(...xs) - Math.min(...xs)) / scale));
+        const h = Math.max(1, Math.round((Math.max(...ys) - Math.min(...ys)) / scale));
+        const text = `X ${x}  Y ${y}  ·  ${w} × ${h} px`;
+        context.save();
+        context.font = '600 11px ui-monospace, "SFMono-Regular", Consolas, monospace';
+        const width = Math.ceil(context.measureText(text).width) + 16;
+        const height = 24;
+        const left = clamp(Math.min(...xs), 6, Math.max(6, state.viewW - width - 6));
+        const top = clamp(Math.min(...ys) - height - 6, 6, Math.max(6, state.viewH - height - 6));
+        roundedRect(context, left, top, width, height, 6);
+        context.fillStyle = 'rgba(18,20,14,.94)';
+        context.fill();
+        context.strokeStyle = state.locked ? 'rgba(255,255,255,.5)' : uiColor('--accent');
+        context.lineWidth = 1;
+        context.stroke();
+        context.fillStyle = state.locked ? uiColor('--text') : uiColor('--accent');
+        context.fillText(text, left + 8, top + 16);
+        context.restore();
+      }
+
       function imageBounds(panX = state.panX, panY = state.panY) {
         const scale = state.baseScale * state.zoom;
         const angle = (state.rotation + state.fineRotation) * Math.PI / 180;
@@ -1706,13 +1788,17 @@
           ctx.restore();
         }
 
-        const handles = getHandles();
-        ctx.fillStyle = uiColor('--accent');
-        ctx.strokeStyle = uiColor('--accent-ink');
-        ctx.lineWidth = 1;
-        for (const p of Object.values(handles)) {
-          roundedRect(ctx, p.x - icons.handleSize / 2, p.y - icons.handleSize / 2, icons.handleSize, icons.handleSize, 3);
-          ctx.fill(); ctx.stroke();
+        drawBoardImageSelection(ctx);
+
+        if (!isBoard()) {
+          const handles = getHandles();
+          ctx.fillStyle = uiColor('--accent');
+          ctx.strokeStyle = uiColor('--accent-ink');
+          ctx.lineWidth = 1;
+          for (const p of Object.values(handles)) {
+            roundedRect(ctx, p.x - icons.handleSize / 2, p.y - icons.handleSize / 2, icons.handleSize, icons.handleSize, 3);
+            ctx.fill(); ctx.stroke();
+          }
         }
         drawRotationHud(ctx);
         ctx.restore();
@@ -1720,7 +1806,7 @@
       }
 
       function getHandles() {
-        if (isBoard()) return {};
+        if (isBoard()) return state.image ? imageCorners() : {};
         const c = state.crop;
         return {
           nw: { x: c.x, y: c.y }, n: { x: c.x + c.w / 2, y: c.y }, ne: { x: c.x + c.w, y: c.y },
@@ -1926,6 +2012,24 @@
         state.snapGuides = guides.x.length || guides.y.length ? guides : null;
       }
 
+      function resizeBoardImage(interaction, pointerX, pointerY) {
+        const anchor = interaction.imageAnchor;
+        const handle = interaction.imageHandle;
+        if (!anchor || !handle) return;
+        const vx = handle.x - anchor.x;
+        const vy = handle.y - anchor.y;
+        const lengthSquared = vx * vx + vy * vy;
+        if (lengthSquared < 1) return;
+        const ratio = 1 + ((pointerX - interaction.startX) * vx + (pointerY - interaction.startY) * vy) / lengthSquared;
+        const zoom = clamp(interaction.startZoom * ratio, .05, 20);
+        const appliedRatio = zoom / interaction.startZoom;
+        state.zoom = zoom;
+        state.panX = anchor.x + vx * appliedRatio / 2 - state.viewW / 2;
+        state.panY = anchor.y + vy * appliedRatio / 2 - state.viewH / 2;
+        state.snapGuides = null;
+        syncControls();
+      }
+
       function resizeCrop(handle, dx, dy, start) {
         const min = 44;
         const bounds = imageBounds();
@@ -2021,12 +2125,15 @@
         if (!handle && !guide && state.mode !== 'rotate' && !insideCrop(p.x, p.y)) return;
         canvas.setPointerCapture(e.pointerId);
         state.interaction = {
-          kind: handle ? 'resize' : guide ? 'guide' : state.mode,
+          kind: handle ? (isBoard() ? 'resizeImage' : 'resize') : guide ? 'guide' : state.mode,
           handle,
           guideId: guide?.id || null,
           startX: p.x, startY: p.y,
           startCrop: { ...state.crop },
           startPanX: state.panX, startPanY: state.panY,
+          startZoom: state.zoom,
+          imageAnchor: handle && isBoard() ? imageCorners()[{ nw: 'se', ne: 'sw', se: 'nw', sw: 'ne' }[handle]] : null,
+          imageHandle: handle && isBoard() ? imageCorners()[handle] : null,
           startFineRotation: state.fineRotation,
           before: snapshot(), moved: false
         };
@@ -2061,6 +2168,7 @@
           syncControls();
         }
         else if (i.kind === 'resize') resizeCrop(i.handle, dx, dy, i.startCrop);
+        else if (i.kind === 'resizeImage') resizeBoardImage(i, p.x, p.y);
         else if (i.kind === 'image') moveImageWithSnap(i.startPanX + dx, i.startPanY + dy);
         else moveCropWithSnap(i.startCrop.x + dx, i.startCrop.y + dy, i.startCrop.w, i.startCrop.h);
         updateOutputSize();
