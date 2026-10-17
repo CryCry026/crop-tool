@@ -2027,6 +2027,15 @@
 
       const SNAP_DISTANCE = 12;
 
+      function setSnapping(enabled, notify = false) {
+        if (state.exporting) return;
+        state.snap = !!enabled;
+        state.snapGuides = null;
+        if (state.interaction) state.interaction.imageScaleSnap = null;
+        saveWorkspacePreferences(); syncControls(); render();
+        if (notify) showToast(state.snap ? '吸附已开启' : '吸附已关闭');
+      }
+
       function visibleGuidePositions(axis) {
         return state.guidesVisible ? state.guides.filter(guide => guide.axis === axis).map(guide => guide.position) : [];
       }
@@ -3082,6 +3091,7 @@
       const shortcutDefinitions = [
         ['moveImage', '移动图片', 'V'], ['moveCrop', '移动裁剪框（普通裁图）', 'C'], ['rotate', '拖动旋转', 'R'],
         ['lock', '锁定 / 解锁当前图片', 'L'], ['guides', '显示 / 隐藏参考线', 'G'],
+        ['snap', '开启 / 关闭吸附（图片边缘和参考线）', 'S'],
         ['horizontal', '添加横向参考线', 'Shift+H'], ['vertical', '添加竖向参考线', 'Shift+V'],
         ['left', '向左微调（Shift 为 10 像素）', 'ArrowLeft'], ['right', '向右微调（Shift 为 10 像素）', 'ArrowRight'],
         ['up', '向上微调（Shift 为 10 像素）', 'ArrowUp'], ['down', '向下微调（Shift 为 10 像素）', 'ArrowDown'],
@@ -3190,6 +3200,7 @@
 
       function runShortcut(id, e) {
         if (id === 'help') { openSettings('shortcuts'); return; }
+        if (id === 'snap') { setSnapping(!state.snap, true); return; }
         if (!state.image) return;
         if (['left', 'right', 'up', 'down'].includes(id)) { nudgeImage(id, e.shiftKey ? 10 : 1); return; }
         if (id === 'previous' || id === 'next') {
@@ -3227,7 +3238,7 @@
           $(`[data-shortcut="${id}"]`).focus({ preventScroll: true });
           return;
         }
-        if ($('#settingsDialog').open || $('#sourcePermissionDialog').open || state.exporting || state.interaction || !state.shortcutsEnabled) return;
+        if ($('#settingsDialog').open || $('#sourcePermissionDialog').open || state.exporting || !state.shortcutsEnabled) return;
         const target = e.target;
         if (target.closest('input, select, textarea, [contenteditable]:not([contenteditable="false"])')) return;
         // Keep native activation on focused controls (especially Enter/Space).
@@ -3237,7 +3248,7 @@
         if (!definition && e.shiftKey && e.key.startsWith('Arrow') && !e.ctrlKey && !e.metaKey && !e.altKey) {
           definition = shortcutDefinitions.find(([id]) => ['left', 'right', 'up', 'down'].includes(id) && state.shortcutBindings[id] === e.key);
         }
-        if (!definition) return;
+        if (!definition || (state.interaction && definition[0] !== 'snap')) return;
         e.preventDefault();
         if (e.repeat && !['left', 'right', 'up', 'down', 'zoomIn', 'zoomOut'].includes(definition[0])) return;
         runShortcut(definition[0], e);
@@ -3346,7 +3357,7 @@
       $('#resetZoomBtn').addEventListener('click', () => action(() => { state.zoom = 1; }));
       $('#resetFineRotateBtn').addEventListener('click', () => action(() => { state.fineRotation = 0; }));
       $('#gridToggle').addEventListener('change', e => { state.grid = e.target.checked; saveWorkspacePreferences(); render(); });
-      $('#snapToggle').addEventListener('change', (e) => { state.snap = e.target.checked; state.snapGuides = null; saveWorkspacePreferences(); render(); });
+      $('#snapToggle').addEventListener('change', e => setSnapping(e.target.checked));
       $('#guideToggle').addEventListener('change', e => { state.guidesVisible = e.target.checked; saveWorkspacePreferences(); render(); });
       $('#guideSyncToggle').addEventListener('change', (e) => setGuideSync(e.target.checked));
       $('#addVerticalGuideBtn').addEventListener('click', () => addGuide('x'));
@@ -3430,7 +3441,12 @@
           }
           const used = new Set();
           for (const [id] of shortcutDefinitions) {
-            const candidate = Object.prototype.hasOwnProperty.call(preferences.shortcutBindings || {}, id) ? preferences.shortcutBindings[id] : defaultShortcuts[id];
+            const hasSavedBinding = Object.prototype.hasOwnProperty.call(preferences.shortcutBindings || {}, id);
+            const candidate = hasSavedBinding ? preferences.shortcutBindings[id] : defaultShortcuts[id];
+            // A new default must not take a key already saved for another action.
+            if (!hasSavedBinding && shortcutDefinitions.some(([other]) => other !== id && preferences.shortcutBindings?.[other] === candidate)) {
+              state.shortcutBindings[id] = null; continue;
+            }
             if (candidate === null) { state.shortcutBindings[id] = null; continue; }
             if (typeof candidate === 'string' && candidate.length <= 40 && !reservedShortcut(candidate) && !used.has(candidate)) { state.shortcutBindings[id] = candidate; used.add(candidate); }
             else state.shortcutBindings[id] = null;
