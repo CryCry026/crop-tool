@@ -429,8 +429,16 @@
     .settings-section .toggle-row { margin-top: 12px; gap: 10px; }
     .settings-section .toggle-row > label:first-child { flex: 1; }
     .settings-section input[type=number] { width: 100%; min-width: 0; height: 39px; padding: 0 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font-variant-numeric: tabular-nums; }
-    .settings-section .number-row { margin: 12px 0; grid-template-columns: 1fr 16px 1fr; }
+    .settings-section .number-row { margin: 12px 0; grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr); }
     .settings-section .number-box { min-width: 0; }
+    .board-preset-head { display: flex; align-items: center; justify-content: space-between; margin: 15px 0 7px; color: var(--muted); font-size: 11px; }
+    .board-preset-head button { padding: 3px 7px; font-size: 11px; }
+    #swapBoardSizeBtn { width: 34px; height: 39px; padding: 0; font-size: 18px; }
+    .board-size-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .board-preset-save { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg); }
+    .board-preset-save label { display: block; margin-bottom: 7px; color: var(--muted); font-size: 11px; }
+    .board-preset-save input { width: 100%; min-width: 0; height: 37px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; color: var(--text); background: var(--panel); font-size: 12px; }
+    .board-preset-save .board-size-actions { margin-top: 9px; }
     .settings-section .theme-switcher { width: fit-content; margin-top: 10px; }
     .settings-section .ratio-sync-chip { justify-content: space-between; padding: 10px 0; border: 0; background: none; }
     .settings-section .guide-sync-row { margin: 8px 0 0; }
@@ -827,9 +835,15 @@
             <h3>工作模式</h3>
             <select id="workspaceModeSelect" aria-label="工作模式"><option value="crop">普通裁图 · 自由调整裁剪框</option><option value="board">固定画布 · 图片作为独立图层</option></select>
             <div id="boardSettings" hidden>
-              <div class="number-row"><div class="number-box"><label for="boardWidth">画布宽度 px</label><input id="boardWidth" type="number" min="1" max="12000" value="750"></div><span aria-hidden="true">×</span><div class="number-box"><label for="boardHeight">画布高度 px</label><input id="boardHeight" type="number" min="1" max="12000" value="1000"></div></div>
-              <button class="btn" id="applyBoardSizeBtn">应用画布尺寸</button>
-              <p class="settings-note">画布尺寸统一决定导出范围。参考线固定在画布坐标上，窗口缩放只改变预览。应用新尺寸时按相对位置缩放已有排版。</p>
+              <div class="board-preset-head"><label for="boardPresetSelect">常用画布尺寸</label><button class="btn" id="deleteBoardPresetBtn" title="删除自己保存的尺寸预设" disabled>删除预设</button></div>
+              <select id="boardPresetSelect" aria-label="画布尺寸预设"></select>
+              <div class="number-row"><div class="number-box"><label for="boardWidth">画布宽度 px</label><input id="boardWidth" type="number" min="1" max="12000" value="750"></div><button class="btn" id="swapBoardSizeBtn" title="交换宽高并应用到全部图片" aria-label="交换画布宽高并应用">⇄</button><div class="number-box"><label for="boardHeight">画布高度 px</label><input id="boardHeight" type="number" min="1" max="12000" value="1000"></div></div>
+              <div class="board-size-actions"><button class="btn" id="applyBoardSizeBtn">应用画布尺寸</button><button class="btn" id="saveBoardPresetBtn" aria-expanded="false" aria-controls="boardPresetSaveForm">保存为常用</button></div>
+              <div class="board-preset-save" id="boardPresetSaveForm" hidden>
+                <label for="boardPresetName">预设名称（选填）</label><input id="boardPresetName" type="text" maxlength="32" placeholder="例如：商品主图" autocomplete="off">
+                <div class="board-size-actions"><button class="btn" id="confirmBoardPresetBtn">保存并应用</button><button class="btn" id="cancelBoardPresetBtn">取消</button></div>
+              </div>
+              <p class="settings-note">选择预设或交换宽高会立即应用到全部图片。最近使用的尺寸排在前面，常用预设会在此浏览器中保留；切换尺寸沿用各图的相对排版与参考线，图片不拉伸。</p>
               <p class="settings-error" id="boardSizeError" role="status"></p>
             </div>
           </section>
@@ -916,7 +930,8 @@
         ,workMode: 'crop', boardW: 750, boardH: 1000, boardViewScale: 1,
         locked: false, inheritPlacement: false, lastBoardPlacement: null,
         guideModes: { crop: { sync: false, template: [] }, board: { sync: true, template: [] } },
-        shortcutsEnabled: true, shortcutBindings: {}, capturingShortcut: null
+        shortcutsEnabled: true, shortcutBindings: {}, capturingShortcut: null,
+        boardPresets: [], recentBoardSizes: []
       };
 
       const icons = {
@@ -925,6 +940,87 @@
       };
 
       const isBoard = () => state.workMode === 'board';
+      const defaultBoardSizes = [
+        { w: 750, h: 1000 }, { w: 1200, h: 1600 },
+        { w: 1080, h: 1080 }, { w: 1080, h: 1920 }
+      ];
+
+      function validBoardSize(w, h) {
+        return Number.isInteger(w) && Number.isInteger(h) && w >= 1 && h >= 1 && w <= 12000 && h <= 12000 && w * h <= 80_000_000;
+      }
+
+      function boardSizeKey(size) { return `${size.w}x${size.h}`; }
+
+      function boardSizeCaption(size) {
+        let a = size.w, b = size.h;
+        while (b) [a, b] = [b, a % b];
+        const name = state.boardPresets.find(preset => boardSizeKey(preset) === boardSizeKey(size))?.name;
+        return `${size.w} × ${size.h} px · ${size.w / a}:${size.h / a}${name ? ` · ${name}` : ''}`;
+      }
+
+      function updateBoardPresetSelection() {
+        const select = $('#boardPresetSelect');
+        const key = boardSizeKey({ w: Number($('#boardWidth').value), h: Number($('#boardHeight').value) });
+        select.value = Array.from(select.options).some(option => option.value === key) ? key : '';
+        select.title = select.selectedOptions[0]?.textContent || '';
+        $('#deleteBoardPresetBtn').disabled = state.exporting || !state.boardPresets.some(preset => boardSizeKey(preset) === key);
+      }
+
+      function renderBoardPresets() {
+        const select = $('#boardPresetSelect');
+        select.replaceChildren();
+        const placeholder = document.createElement('option');
+        placeholder.value = ''; placeholder.textContent = '自定义尺寸 / 选择预设'; select.append(placeholder);
+        const seen = new Set();
+        for (const [label, sizes] of [['最近使用', state.recentBoardSizes], ['我的常用', state.boardPresets], ['基础尺寸', defaultBoardSizes]]) {
+          const group = document.createElement('optgroup'); group.label = label;
+          for (const size of sizes) {
+            const key = boardSizeKey(size);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const option = document.createElement('option'); option.value = key; option.textContent = boardSizeCaption(size); group.append(option);
+          }
+          if (group.children.length) select.append(group);
+        }
+        const current = { w: state.boardW, h: state.boardH };
+        if (!seen.has(boardSizeKey(current))) {
+          const option = document.createElement('option'); option.value = boardSizeKey(current); option.textContent = `当前画布 · ${boardSizeCaption(current)}`; select.append(option);
+        }
+        updateBoardPresetSelection();
+      }
+
+      function rememberBoardSize(w, h) {
+        state.recentBoardSizes = [{ w, h }, ...state.recentBoardSizes.filter(size => size.w !== w || size.h !== h)].slice(0, 5);
+      }
+
+      function readBoardSize() {
+        const w = Number($('#boardWidth').value), h = Number($('#boardHeight').value);
+        if (!validBoardSize(w, h)) {
+          $('#boardSizeError').textContent = '宽高请填写 1–12000 的整数，总像素不能超过 8000 万。';
+          return null;
+        }
+        $('#boardSizeError').textContent = '';
+        return { w, h };
+      }
+
+      function closeBoardPresetForm() {
+        $('#boardPresetSaveForm').hidden = true;
+        $('#saveBoardPresetBtn').setAttribute('aria-expanded', 'false');
+      }
+
+      function saveBoardPreset() {
+        if (state.exporting) return;
+        const size = readBoardSize();
+        if (!size) return;
+        const name = $('#boardPresetName').value.trim().slice(0, 32);
+        const existing = state.boardPresets.find(preset => boardSizeKey(preset) === boardSizeKey(size));
+        if (existing) existing.name = name;
+        else state.boardPresets.push({ ...size, name });
+        closeBoardPresetForm();
+        applyBoardSize();
+        showToast(`已保存常用尺寸 · ${name || `${size.w} × ${size.h} px`}`);
+      }
+
       function boardPlacement() {
         const scale = state.boardViewScale || 1;
         return {
@@ -955,6 +1051,7 @@
         try {
           localStorage.setItem('crop-tool-workspace-v1', JSON.stringify({
             workMode: state.workMode, boardW: state.boardW, boardH: state.boardH,
+            boardPresets: state.boardPresets, recentBoardSizes: state.recentBoardSizes,
             inheritPlacement: state.inheritPlacement, grid: state.grid, snap: state.snap,
             guidesVisible: state.guidesVisible, guideModes: state.guideModes,
             syncRatio: state.syncRatio, sharedRatio: state.sharedRatio,
@@ -992,12 +1089,15 @@
       }
 
       function applyBoardSize() {
-        const w = Number($('#boardWidth').value), h = Number($('#boardHeight').value);
-        if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1 || w > 12000 || h > 12000 || w * h > 80_000_000) {
-          $('#boardSizeError').textContent = '宽高请填写 1–12000 的整数，总像素不能超过 8000 万。';
+        if (state.exporting) return;
+        const size = readBoardSize();
+        if (!size) return;
+        const { w, h } = size;
+        rememberBoardSize(w, h);
+        if (w === state.boardW && h === state.boardH) {
+          saveWorkspacePreferences(); renderBoardPresets();
           return;
         }
-        if (state.exporting) return;
         const placement = state.image && isBoard() ? boardPlacement() : null;
         const guides = state.image && isBoard() ? guidesToRelative() : null;
         saveActiveItem();
@@ -1010,7 +1110,7 @@
         }
         if (isBoard() && state.image) { projectBoard(placement, guides); updateOutputSize(true); saveActiveItem(); }
         $('#boardSizeError').textContent = '';
-        saveWorkspacePreferences(); syncControls(); updateHistoryButtons(); render();
+        saveWorkspacePreferences(); renderBoardPresets(); syncControls(); updateHistoryButtons(); render();
         showToast(`画布已设为 ${w} × ${h} px`);
       }
 
@@ -2017,6 +2117,46 @@
         state.snapGuides = guides.x.length || guides.y.length ? guides : null;
       }
 
+      function snapBoardImageScale(interaction, rawZoom) {
+        const bounds = interaction.imageStartBounds;
+        if (!state.snap || !bounds) {
+          interaction.imageScaleSnap = null;
+          state.snapGuides = null;
+          return rawZoom;
+        }
+        const anchor = interaction.imageAnchor, handle = interaction.imageHandle;
+        const travel = Math.hypot(handle.x - anchor.x, handle.y - anchor.y);
+        const rawRatio = rawZoom / interaction.startZoom;
+        const c = state.crop;
+        const candidates = [];
+        for (const [axis, low, high, start, end] of [
+          ['x', 'left', 'right', c.x, c.x + c.w], ['y', 'top', 'bottom', c.y, c.y + c.h]
+        ]) {
+          const targets = [{ edge: low, line: start }, { edge: high, line: end },
+            ...visibleGuidePositions(axis).flatMap(line => [{ edge: low, line }, { edge: high, line }])];
+          for (const { edge, line } of targets) {
+            const span = bounds[edge] - anchor[axis];
+            if (Math.abs(span) < .0001) continue;
+            const ratio = (line - anchor[axis]) / span;
+            const zoom = interaction.startZoom * ratio;
+            if (zoom < .05 || zoom > 20) continue;
+            candidates.push({ axis, edge, line, ratio, key: `${axis}:${edge}:${line}`, distance: Math.abs(ratio - rawRatio) * travel });
+          }
+        }
+        const held = candidates.find(candidate => candidate.key === interaction.imageScaleSnap && candidate.distance <= SNAP_DISTANCE * 1.5);
+        const match = held || candidates.filter(candidate => candidate.distance <= SNAP_DISTANCE).sort((a, b) => a.distance - b.distance)[0];
+        interaction.imageScaleSnap = match?.key || null;
+        const guides = { x: [], y: [] };
+        if (match) {
+          for (const candidate of candidates) {
+            const position = anchor[candidate.axis] + (bounds[candidate.edge] - anchor[candidate.axis]) * match.ratio;
+            if (Math.abs(position - candidate.line) < .75 && !guides[candidate.axis].includes(candidate.line)) guides[candidate.axis].push(candidate.line);
+          }
+        }
+        state.snapGuides = guides.x.length || guides.y.length ? guides : null;
+        return match ? interaction.startZoom * match.ratio : rawZoom;
+      }
+
       function resizeBoardImage(interaction, pointerX, pointerY) {
         const anchor = interaction.imageAnchor;
         const handle = interaction.imageHandle;
@@ -2026,12 +2166,11 @@
         const lengthSquared = vx * vx + vy * vy;
         if (lengthSquared < 1) return;
         const ratio = 1 + ((pointerX - interaction.startX) * vx + (pointerY - interaction.startY) * vy) / lengthSquared;
-        const zoom = clamp(interaction.startZoom * ratio, .05, 20);
+        const zoom = snapBoardImageScale(interaction, clamp(interaction.startZoom * ratio, .05, 20));
         const appliedRatio = zoom / interaction.startZoom;
         state.zoom = zoom;
         state.panX = anchor.x + vx * appliedRatio / 2 - state.viewW / 2;
         state.panY = anchor.y + vy * appliedRatio / 2 - state.viewH / 2;
-        state.snapGuides = null;
         syncControls();
       }
 
@@ -2141,6 +2280,7 @@
           startZoom: state.zoom,
           imageAnchor: boardHandles?.[opposite[handle]] || null,
           imageHandle: boardHandles?.[handle] || null,
+          imageStartBounds: boardHandles ? imageBounds() : null,
           startFineRotation: state.fineRotation,
           before: snapshot(), moved: false
         };
@@ -2313,7 +2453,8 @@
         for (const id of ['zoomSlider', 'fineRotateSlider', 'resetZoomBtn', 'resetFineRotateBtn', 'rotateLeftBtn', 'rotateRightBtn', 'resetAngleBtn', 'flipXBtn', 'flipYBtn', 'fitBtn', 'resetBtn']) {
           $(`#${id}`).disabled = !state.image || state.locked || state.exporting;
         }
-        for (const id of ['workspaceModeSelect', 'applyBoardSizeBtn', 'boardWidth', 'boardHeight', 'inheritPlacementToggle', 'guideSyncToggle', 'gridToggle', 'snapToggle', 'guideToggle']) $(`#${id}`).disabled = state.exporting;
+        for (const id of ['workspaceModeSelect', 'applyBoardSizeBtn', 'boardWidth', 'boardHeight', 'boardPresetSelect', 'swapBoardSizeBtn', 'saveBoardPresetBtn', 'confirmBoardPresetBtn', 'cancelBoardPresetBtn', 'boardPresetName', 'inheritPlacementToggle', 'guideSyncToggle', 'gridToggle', 'snapToggle', 'guideToggle']) $(`#${id}`).disabled = state.exporting;
+        updateBoardPresetSelection();
         updateWorkspaceState();
       }
 
@@ -3009,6 +3150,7 @@
         if (state.exporting || state.interaction) return;
         $('#boardWidth').value = state.boardW; $('#boardHeight').value = state.boardH;
         $('#boardSizeError').textContent = '';
+        closeBoardPresetForm(); renderBoardPresets();
         selectSettingsTab(tab); syncControls();
         if (!$('#settingsDialog').open) $('#settingsDialog').showModal();
         (tab === 'shortcuts' ? $('#shortcutsTab') : $('#workspaceModeSelect')).focus({ preventScroll: true });
@@ -3120,6 +3262,48 @@
       });
       $('#workspaceModeSelect').addEventListener('change', e => setWorkMode(e.target.value));
       $('#applyBoardSizeBtn').addEventListener('click', applyBoardSize);
+      $('#boardPresetSelect').addEventListener('change', e => {
+        if (state.exporting || !e.target.value) return;
+        const [w, h] = e.target.value.split('x').map(Number);
+        if (!validBoardSize(w, h)) return;
+        $('#boardWidth').value = w; $('#boardHeight').value = h;
+        closeBoardPresetForm(); applyBoardSize();
+      });
+      for (const id of ['boardWidth', 'boardHeight']) $(`#${id}`).addEventListener('input', () => {
+        $('#boardSizeError').textContent = ''; updateBoardPresetSelection();
+      });
+      $('#swapBoardSizeBtn').addEventListener('click', () => {
+        if (state.exporting) return;
+        const size = readBoardSize();
+        if (!size) return;
+        $('#boardWidth').value = size.h; $('#boardHeight').value = size.w;
+        closeBoardPresetForm(); applyBoardSize();
+      });
+      $('#saveBoardPresetBtn').addEventListener('click', () => {
+        if (state.exporting) return;
+        const size = readBoardSize();
+        if (!size) return;
+        $('#boardPresetName').value = state.boardPresets.find(preset => boardSizeKey(preset) === boardSizeKey(size))?.name || '';
+        $('#boardPresetSaveForm').hidden = false;
+        $('#saveBoardPresetBtn').setAttribute('aria-expanded', 'true');
+        $('#boardPresetName').focus();
+      });
+      $('#confirmBoardPresetBtn').addEventListener('click', saveBoardPreset);
+      $('#cancelBoardPresetBtn').addEventListener('click', () => { closeBoardPresetForm(); $('#saveBoardPresetBtn').focus(); });
+      $('#boardPresetName').addEventListener('keydown', e => {
+        if (e.isComposing) return;
+        if (e.key === 'Enter') { e.preventDefault(); saveBoardPreset(); }
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeBoardPresetForm(); $('#saveBoardPresetBtn').focus(); }
+      });
+      $('#deleteBoardPresetBtn').addEventListener('click', () => {
+        if (state.exporting) return;
+        const key = $('#boardPresetSelect').value;
+        if (!state.boardPresets.some(preset => boardSizeKey(preset) === key)) return;
+        state.boardPresets = state.boardPresets.filter(preset => boardSizeKey(preset) !== key);
+        state.recentBoardSizes = state.recentBoardSizes.filter(size => boardSizeKey(size) !== key);
+        closeBoardPresetForm(); saveWorkspacePreferences(); renderBoardPresets();
+        showToast('已删除常用预设，当前画布保持不变'); $('#boardPresetSelect').focus();
+      });
       $('#imageLockToggle').addEventListener('change', toggleImageLock);
       $('#inheritPlacementToggle').addEventListener('change', e => { state.inheritPlacement = e.target.checked; saveWorkspacePreferences(); });
       $('#shortcutsEnabledToggle').addEventListener('change', e => { state.shortcutsEnabled = e.target.checked; saveWorkspacePreferences(); });
@@ -3229,6 +3413,15 @@
         if (preferences) {
           state.workMode = preferences.workMode === 'board' ? 'board' : 'crop';
           if (Number.isInteger(preferences.boardW) && Number.isInteger(preferences.boardH) && preferences.boardW >= 1 && preferences.boardH >= 1 && preferences.boardW <= 12000 && preferences.boardH <= 12000 && preferences.boardW * preferences.boardH <= 80_000_000) { state.boardW = preferences.boardW; state.boardH = preferences.boardH; }
+          for (const preset of Array.isArray(preferences.boardPresets) ? preferences.boardPresets : []) {
+            if (!preset || !validBoardSize(preset.w, preset.h) || state.boardPresets.some(size => boardSizeKey(size) === boardSizeKey(preset))) continue;
+            state.boardPresets.push({ w: preset.w, h: preset.h, name: typeof preset.name === 'string' ? preset.name.trim().slice(0, 32) : '' });
+          }
+          for (const size of Array.isArray(preferences.recentBoardSizes) ? preferences.recentBoardSizes : []) {
+            if (!size || !validBoardSize(size.w, size.h) || state.recentBoardSizes.some(recent => boardSizeKey(recent) === boardSizeKey(size))) continue;
+            state.recentBoardSizes.push({ w: size.w, h: size.h });
+            if (state.recentBoardSizes.length === 5) break;
+          }
           for (const key of ['inheritPlacement', 'grid', 'snap', 'guidesVisible', 'syncRatio', 'shortcutsEnabled']) if (typeof preferences[key] === 'boolean') state[key] = preferences[key];
           if (preferences.sharedRatio === null || Number.isFinite(preferences.sharedRatio) && preferences.sharedRatio > 0) state.sharedRatio = preferences.sharedRatio;
           for (const mode of ['crop', 'board']) {
@@ -3247,6 +3440,7 @@
       state.syncGuides = state.guideModes[state.workMode].sync;
       state.sharedGuides = state.guideModes[state.workMode].template.map(g => ({ ...g }));
       $('#boardWidth').value = state.boardW; $('#boardHeight').value = state.boardH;
+      renderBoardPresets();
       setTheme(savedTheme, false);
       setExportMode(state.exportMode, false);
       restoreDefaultDirectoryHandle();
