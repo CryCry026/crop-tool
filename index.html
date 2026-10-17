@@ -843,7 +843,8 @@
                 <label for="boardPresetName">预设名称（选填）</label><input id="boardPresetName" type="text" maxlength="32" placeholder="例如：商品主图" autocomplete="off">
                 <div class="board-size-actions"><button class="btn" id="confirmBoardPresetBtn">保存并应用</button><button class="btn" id="cancelBoardPresetBtn">取消</button></div>
               </div>
-              <p class="settings-note">选择预设或交换宽高会立即应用到全部图片。最近使用的尺寸排在前面，常用预设会在此浏览器中保留；切换尺寸沿用各图的相对排版与参考线，图片不拉伸。</p>
+              <p class="settings-note">选择预设或交换宽高会立即应用到全部图片，图片不拉伸。每个尺寸单独记住参考线，切回来自动恢复；修改、清空都会保存。升级时，现有尺寸先沿用原来的参考线排版，之后新建的尺寸从空白开始。</p>
+              <p class="settings-note" id="boardGuideLayoutStatus" role="status"></p>
               <p class="settings-error" id="boardSizeError" role="status"></p>
             </div>
           </section>
@@ -931,7 +932,7 @@
         locked: false, inheritPlacement: false, lastBoardPlacement: null,
         guideModes: { crop: { sync: false, template: [] }, board: { sync: true, template: [] } },
         shortcutsEnabled: true, shortcutBindings: {}, capturingShortcut: null,
-        boardPresets: [], recentBoardSizes: []
+        boardPresets: [], recentBoardSizes: [], boardGuideLayouts: {}, guideLayoutBackupPending: null, workspaceSaveFailed: false
       };
 
       const icons = {
@@ -950,6 +951,62 @@
       }
 
       function boardSizeKey(size) { return `${size.w}x${size.h}`; }
+
+      function currentBoardSizeKey() { return boardSizeKey({ w: state.boardW, h: state.boardH }); }
+
+      function copyGuideTemplate(template) { return template.map(guide => ({ ...guide })); }
+
+      function cleanGuideTemplate(template) {
+        return (Array.isArray(template) ? template : []).slice(0, 200)
+          .filter(guide => guide && ['x', 'y'].includes(guide.axis) && typeof guide.id === 'string' && Number.isFinite(guide.ratio) && guide.ratio >= -.0000001 && guide.ratio <= 1.0000001)
+          .map(guide => ({ id: guide.id, axis: guide.axis, ratio: Math.min(1, Math.max(0, guide.ratio)) }));
+      }
+
+      function currentBoardGuideTemplate() { return copyGuideTemplate(state.boardGuideLayouts[currentBoardSizeKey()] || []); }
+
+      function rememberBoardGuides() {
+        if (!isBoard() || !state.image || state.exporting) return;
+        const template = guidesToRelative(), key = currentBoardSizeKey();
+        if (!state.syncGuides) {
+          // Freeze the previous size default for unvisited images BEFORE updating it.
+          // Otherwise the first edited image would silently change their independent guides.
+          const previous = currentBoardGuideTemplate();
+          for (const item of state.items) {
+            item.boardGuideLayouts ||= {};
+            if (!Object.prototype.hasOwnProperty.call(item.boardGuideLayouts, key)) item.boardGuideLayouts[key] = copyGuideTemplate(previous);
+          }
+        }
+        state.boardGuideLayouts[key] = copyGuideTemplate(template);
+        const item = activeItem();
+        if (item) { item.boardGuideLayouts ||= {}; item.boardGuideLayouts[key] = copyGuideTemplate(template); }
+        if (state.syncGuides) state.sharedGuides = copyGuideTemplate(template);
+      }
+
+      function boardGuidesForItem(item) {
+        const key = currentBoardSizeKey();
+        // An explicitly cleared layout ([]) is a saved layout, not a missing one.
+        return !state.syncGuides && Object.prototype.hasOwnProperty.call(item.boardGuideLayouts || {}, key)
+          ? copyGuideTemplate(item.boardGuideLayouts[key]) : currentBoardGuideTemplate();
+      }
+
+      function loadBoardGuideLayouts(preferences, originalWorkspace) {
+        if (preferences?.boardGuideLayoutsVersion === 1 && preferences.boardGuideLayouts && typeof preferences.boardGuideLayouts === 'object' && !Array.isArray(preferences.boardGuideLayouts)) {
+          for (const [key, template] of Object.entries(preferences.boardGuideLayouts)) {
+            const match = /^(\d+)x(\d+)$/.exec(key);
+            if (match && validBoardSize(Number(match[1]), Number(match[2])) && Array.isArray(template)) state.boardGuideLayouts[key] = cleanGuideTemplate(template);
+          }
+        } else {
+          // One-time migration runs in the user's browser: never invent or upload their guide positions.
+          // Reuse the old proportional layout for ALL sizes that existed before the upgrade.
+          const template = state.guideModes.board.template;
+          for (const size of [{ w: state.boardW, h: state.boardH }, ...defaultBoardSizes, ...state.boardPresets, ...state.recentBoardSizes]) {
+            state.boardGuideLayouts[boardSizeKey(size)] = copyGuideTemplate(template);
+          }
+          state.guideLayoutBackupPending = originalWorkspace;
+        }
+        state.boardGuideLayouts[currentBoardSizeKey()] ||= [];
+        state.guideModes.board.template = currentBoardGuideTemplate();
+      }
 
       function boardSizeCaption(size) {
         let a = size.w, b = size.h;
@@ -1049,20 +1106,29 @@
       function saveWorkspacePreferences() {
         state.guideModes[state.workMode] = { sync: state.syncGuides, template: state.sharedGuides.map(g => ({ ...g })) };
         try {
+          if (state.guideLayoutBackupPending) {
+            if (!localStorage.getItem('crop-tool-guide-layout-backup-v1')) {
+              localStorage.setItem('crop-tool-guide-layout-backup-v1', JSON.stringify({ savedAt: new Date().toISOString(), workspace: state.guideLayoutBackupPending }));
+            }
+            state.guideLayoutBackupPending = null;
+          }
           localStorage.setItem('crop-tool-workspace-v1', JSON.stringify({
             workMode: state.workMode, boardW: state.boardW, boardH: state.boardH,
             boardPresets: state.boardPresets, recentBoardSizes: state.recentBoardSizes,
+            boardGuideLayoutsVersion: 1, boardGuideLayouts: state.boardGuideLayouts,
             inheritPlacement: state.inheritPlacement, grid: state.grid, snap: state.snap,
             guidesVisible: state.guidesVisible, guideModes: state.guideModes,
             syncRatio: state.syncRatio, sharedRatio: state.sharedRatio,
             shortcutsEnabled: state.shortcutsEnabled, shortcutBindings: state.shortcutBindings
           }));
-        } catch (error) { /* preferences remain available for this session */ }
+          state.workspaceSaveFailed = false;
+        } catch (error) { state.workspaceSaveFailed = true; /* keep old preferences intact if backup cannot be saved */ }
       }
 
       function modeSession(item) {
         return { edit: item.edit, outputW: item.outputW, outputH: item.outputH, outputTouched: item.outputTouched,
           undo: item.undo, redo: item.redo,
+          ...(item.boardGuideLayouts ? { boardGuideLayouts: item.boardGuideLayouts } : {}),
           ...(item.pendingGuideTemplate ? { pendingGuideTemplate: item.pendingGuideTemplate } : {}),
           ...(Object.prototype.hasOwnProperty.call(item, 'pendingRatio') ? { pendingRatio: item.pendingRatio } : {}) };
       }
@@ -1075,12 +1141,12 @@
           item.sessions ||= {};
           item.sessions[state.workMode] = modeSession(item);
           const session = item.sessions[mode];
-          for (const key of ['edit', 'outputW', 'outputH', 'outputTouched', 'undo', 'redo', 'pendingGuideTemplate', 'pendingRatio']) delete item[key];
+          for (const key of ['edit', 'outputW', 'outputH', 'outputTouched', 'undo', 'redo', 'pendingGuideTemplate', 'pendingRatio', 'boardGuideLayouts']) delete item[key];
           Object.assign(item, session || { edit: null, undo: [], redo: [] });
         }
         state.workMode = mode;
         state.syncGuides = state.guideModes[mode].sync;
-        state.sharedGuides = state.guideModes[mode].template.map(g => ({ ...g }));
+        state.sharedGuides = isBoard() ? currentBoardGuideTemplate() : copyGuideTemplate(state.guideModes[mode].template);
         const id = state.activeItemId;
         state.activeItemId = null;
         if (id) activateItem(id, false);
@@ -1099,16 +1165,18 @@
           return;
         }
         const placement = state.image && isBoard() ? boardPlacement() : null;
-        const guides = state.image && isBoard() ? guidesToRelative() : null;
         saveActiveItem();
         state.boardW = w; state.boardH = h;
+        state.boardGuideLayouts[currentBoardSizeKey()] ||= [];
+        state.guideModes.board.template = currentBoardGuideTemplate();
+        if (isBoard()) state.sharedGuides = currentBoardGuideTemplate();
         // A canvas-size change is a new layout boundary: do not undo into the old geometry.
         if (isBoard()) { state.undo = []; state.redo = []; }
         for (const item of state.items) {
           const session = isBoard() ? item : item.sessions?.board;
           if (session) { session.undo = []; session.redo = []; }
         }
-        if (isBoard() && state.image) { projectBoard(placement, guides); updateOutputSize(true); saveActiveItem(); }
+        if (isBoard() && state.image) { projectBoard(placement, boardGuidesForItem(activeItem())); updateOutputSize(true); saveActiveItem(); }
         $('#boardSizeError').textContent = '';
         saveWorkspacePreferences(); renderBoardPresets(); syncControls(); updateHistoryButtons(); render();
         showToast(`画布已设为 ${w} × ${h} px`);
@@ -1287,6 +1355,7 @@
       function saveActiveItem() {
         const item = activeItem();
         if (!item || !state.image) return;
+        rememberBoardGuides();
         item.edit = snapshot();
         item.outputW = $('#outputW').value;
         item.outputH = $('#outputH').value;
@@ -1320,8 +1389,10 @@
       }
 
       function syncSharedGuidesFromCurrent() {
-        if (!state.syncGuides || !state.image) return;
-        state.sharedGuides = guidesToRelative();
+        if (!state.image) return;
+        if (isBoard()) rememberBoardGuides();
+        else if (state.syncGuides) state.sharedGuides = guidesToRelative();
+        else return;
         saveWorkspacePreferences();
       }
 
@@ -1329,14 +1400,19 @@
         if (state.exporting) return;
         if (enabled) {
           state.syncGuides = true;
-          state.sharedGuides = guidesToRelative();
+          if (state.image) state.sharedGuides = guidesToRelative();
+          if (isBoard()) rememberBoardGuides();
           state.items.forEach(item => { delete item.pendingGuideTemplate; });
           showToast(`已固定参考线排版位置并同步到 ${state.items.length} 张图片`);
         } else {
           saveActiveItem();
           const template = state.sharedGuides.map(guide => ({ ...guide }));
           state.items.forEach(item => {
-            if (item.id !== state.activeItemId) item.pendingGuideTemplate = template.map(guide => ({ ...guide }));
+            if (isBoard()) {
+              item.boardGuideLayouts ||= {};
+              item.boardGuideLayouts[currentBoardSizeKey()] = copyGuideTemplate(template);
+              delete item.pendingGuideTemplate;
+            } else if (item.id !== state.activeItemId) item.pendingGuideTemplate = copyGuideTemplate(template);
           });
           state.syncGuides = false;
           showToast('已关闭同步；每张图片可独立调整');
@@ -1512,7 +1588,10 @@
           if (isBoard() && state.inheritPlacement && state.lastBoardPlacement) projectBoard(state.lastBoardPlacement);
           updateOutputSize(true);
         }
-        if (state.syncGuides) {
+        if (isBoard()) {
+          state.guides = relativeToGuides(boardGuidesForItem(item));
+          delete item.pendingGuideTemplate;
+        } else if (state.syncGuides) {
           state.guides = relativeToGuides();
         } else if (item.pendingGuideTemplate) {
           state.guides = relativeToGuides(item.pendingGuideTemplate);
@@ -1544,6 +1623,7 @@
         renderQueue();
         render();
         saveActiveItem();
+        if (isBoard() && !state.exporting) saveWorkspacePreferences();
       }
 
       function isImageFile(file) {
@@ -2420,8 +2500,11 @@
         $('#guideSyncToggle').checked = state.syncGuides;
         $('#guideSyncRow').classList.toggle('active', state.syncGuides);
         $('#guideSyncStatus').textContent = state.syncGuides
-          ? `已同步 · ${state.items.length} 张 · 固定排版位置`
+          ? isBoard() ? `同尺寸同步 · ${state.items.length} 张 · 切换尺寸分别记忆` : `已同步 · ${state.items.length} 张 · 固定排版位置`
           : state.items.length > 1 ? '关闭后每张图片独立设置' : '导入多张图片后可同步';
+        $('#boardGuideLayoutStatus').textContent = state.workspaceSaveFailed
+          ? '浏览器未能保存参考线设置，请先不要刷新或关闭页面；检查站点存储权限与可用空间。'
+          : `${state.boardW} × ${state.boardH} px · 已保存 ${currentBoardGuideTemplate().length} 条参考线${state.syncGuides ? ' · 同尺寸图片共用' : ' · 各图可独立调整'}`;
         $('#ratioSyncToggle').checked = state.syncRatio;
         $('#ratioSyncToggle').disabled = isBoard() || state.exporting;
         $('#ratioSyncChip').classList.toggle('active', state.syncRatio);
@@ -3419,8 +3502,10 @@
         if (Number.isFinite(savedMaxMb) && savedMaxMb >= 0.001) $('#jpgMaxSize').value = savedMaxMb;
       } catch (error) { /* use defaults */ }
       state.shortcutBindings = { ...defaultShortcuts };
+      let savedWorkspace = null, savedWorkspacePreferences = null;
       try {
-        const preferences = JSON.parse(localStorage.getItem('crop-tool-workspace-v1') || 'null');
+        savedWorkspace = localStorage.getItem('crop-tool-workspace-v1');
+        const preferences = savedWorkspacePreferences = JSON.parse(savedWorkspace || 'null');
         if (preferences) {
           state.workMode = preferences.workMode === 'board' ? 'board' : 'crop';
           if (Number.isInteger(preferences.boardW) && Number.isInteger(preferences.boardH) && preferences.boardW >= 1 && preferences.boardH >= 1 && preferences.boardW <= 12000 && preferences.boardH <= 12000 && preferences.boardW * preferences.boardH <= 80_000_000) { state.boardW = preferences.boardW; state.boardH = preferences.boardH; }
@@ -3437,7 +3522,7 @@
           if (preferences.sharedRatio === null || Number.isFinite(preferences.sharedRatio) && preferences.sharedRatio > 0) state.sharedRatio = preferences.sharedRatio;
           for (const mode of ['crop', 'board']) {
             const value = preferences.guideModes?.[mode];
-            if (value && typeof value.sync === 'boolean' && Array.isArray(value.template)) state.guideModes[mode] = { sync: value.sync, template: value.template.slice(0, 200).filter(g => ['x', 'y'].includes(g.axis) && Number.isFinite(g.ratio) && g.ratio >= 0 && g.ratio <= 1 && typeof g.id === 'string').map(g => ({ id: g.id, axis: g.axis, ratio: g.ratio })) };
+            if (value && typeof value.sync === 'boolean' && Array.isArray(value.template)) state.guideModes[mode] = { sync: value.sync, template: cleanGuideTemplate(value.template) };
           }
           const used = new Set();
           for (const [id] of shortcutDefinitions) {
@@ -3453,8 +3538,10 @@
           }
         }
       } catch (error) { /* ignore malformed or unavailable saved preferences */ }
+      loadBoardGuideLayouts(savedWorkspacePreferences, savedWorkspace);
       state.syncGuides = state.guideModes[state.workMode].sync;
       state.sharedGuides = state.guideModes[state.workMode].template.map(g => ({ ...g }));
+      saveWorkspacePreferences();
       $('#boardWidth').value = state.boardW; $('#boardHeight').value = state.boardH;
       renderBoardPresets();
       setTheme(savedTheme, false);
